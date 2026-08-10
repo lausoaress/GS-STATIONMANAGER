@@ -1,0 +1,3 @@
+[submodule "vendor/grs-rotor-manager"]
+	path = vendor/grs-rotor-manager
+	url = https://github.com/spacelab-ufsc/grs-rotor-manager

@@ -12,6 +12,7 @@ dependencies = ["Flask>=3.0,<4.0"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0"]
+zmq = ["pyzmq>=25,<26"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
