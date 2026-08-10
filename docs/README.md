@@ -12,7 +12,7 @@ Documentação de arquitetura, modelagem e design do **Gerenciador da Estação 
 | [Casos de uso](architecture/use-cases.md) | Atores, casos de uso e diagramas UML |
 | [Modelo de banco de dados](database/README.md) | ERD, schemas, tabelas e scripts SQL |
 | [Integração com subsistemas](architecture/integration.md) | ZMQ, GRS Manager e Station Server |
-| [Bridge rotctld (gpredict → rotor)](rotctld-bridge.md) | Setup, execução, configuração do gpredict e troubleshooting da ponte de controle de rotor |
+| [Controle de rotor (gpredict → GRS Manager → Station Manager → Rotor Manager)](rotor-control.md) | Arquitetura completa do pipeline, setup, configuração do gpredict e troubleshooting |
 
 ## Referências
 

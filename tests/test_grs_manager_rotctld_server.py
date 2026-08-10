@@ -1,20 +1,41 @@
 import socket
 import threading
+import time
 
 import pytest
 
-from mgm8.application.tracking_service import TrackingService
-from mgm8.infrastructure.mock_rotor import MockRotor
-from mgm8.rotctld.server import RotctldServer
+from grs_manager.domain.models import RotorPosition
+from grs_manager.rotctld.server import RotctldServer
 
 
-class RaisingRotor(MockRotor):
-    def move_to(self, position):
-        raise RuntimeError("rotor físico indisponível")
+class FakeStationManager:
+    """Duplo de RotorControlUseCase -- imita o Station Manager sem precisar de ZMQ."""
+
+    def __init__(self):
+        self.position = RotorPosition(0.0, 0.0)
+        self.stopped = False
+        self.parked = False
+
+    def set_target(self, azimuth_degrees, elevation_degrees):
+        self.position = RotorPosition(azimuth_degrees, elevation_degrees)
+        return self.position
+
+    def get_position(self):
+        return self.position
+
+    def stop(self):
+        self.stopped = True
+
+    def park(self):
+        self.parked = True
 
 
-def start_server(rotor):
-    service = TrackingService(rotor)
+class RaisingStationManager(FakeStationManager):
+    def set_target(self, azimuth_degrees, elevation_degrees):
+        raise RuntimeError("Station Manager indisponível")
+
+
+def start_server(service):
     server = RotctldServer("127.0.0.1", 0, service)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -23,7 +44,7 @@ def start_server(rotor):
 
 @pytest.fixture
 def server():
-    instance = start_server(MockRotor())
+    instance = start_server(FakeStationManager())
     yield instance
     instance.shutdown()
     instance.server_close()
@@ -51,18 +72,7 @@ def test_p_command_returns_current_position(server):
     assert responses == ["0.000000", "0.000000"]
 
 
-def test_uppercase_p_command_sets_target_and_acks(server):
-    responses = send_lines(server.server_address, "P 180.5 45.25", "p", "q")
-
-    assert responses[0] == "RPRT 0"
-    assert responses[1:] == ["180.500000", "45.250000"]
-
-
 def test_dump_state_command_returns_rotor_capabilities(server):
-    # O backend NET rotctl do hamlib (rotctl -m 2, e o gpredict por baixo dos
-    # panos) manda esse comando ao abrir a conexao e exige essa resposta
-    # exata antes de aceitar qualquer outro comando -- sem isso, o cliente
-    # fecha com "Protocol error" mesmo com o socket TCP continuando aberto.
     responses = send_lines(server.server_address, "\\dump_state", "q")
 
     assert responses == [
@@ -78,10 +88,31 @@ def test_dump_state_command_returns_rotor_capabilities(server):
     ]
 
 
+def test_uppercase_p_command_sets_target_and_acks(server):
+    responses = send_lines(server.server_address, "P 180.5 45.25", "p", "q")
+
+    assert responses[0] == "RPRT 0"
+    assert responses[1:] == ["180.500000", "45.250000"]
+
+
 def test_stop_command_acks(server):
     responses = send_lines(server.server_address, "S", "q")
 
     assert responses == ["RPRT 0"]
+
+
+def test_is_gpredict_connected_reflects_active_tcp_connection(server):
+    assert server.is_gpredict_connected is False
+
+    with socket.create_connection(server.server_address, timeout=2) as sock:
+        sock.sendall(b"p\n")
+        sock.recv(4096)
+        assert server.is_gpredict_connected is True
+
+    deadline = time.monotonic() + 2
+    while time.monotonic() < deadline and server.is_gpredict_connected:
+        time.sleep(0.01)
+    assert server.is_gpredict_connected is False
 
 
 def test_unknown_command_gets_generic_ack_instead_of_dropping_connection(server):
@@ -99,7 +130,7 @@ def test_malformed_p_command_returns_error_without_dropping_connection(server):
 
 
 def test_service_exception_returns_error_instead_of_closing_connection():
-    server = start_server(RaisingRotor())
+    server = start_server(RaisingStationManager())
     try:
         responses = send_lines(server.server_address, "P 10 10", "q")
     finally:
