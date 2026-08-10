@@ -58,7 +58,8 @@ git) em vez do mock: `python -m mgm8.rotor_zmq.main --rotor zmq
 O GRS Manager sobe junto um **painel de status** em
 `http://127.0.0.1:5590` (`--status-port` pra mudar, `--no-status` pra
 desligar), mostrando se o gpredict está conectado e se o rotor está
-respondendo (via `GET /health`, JSON).
+respondendo — atualiza ao vivo (Server-Sent Events), sem recarregar a
+página. `GET /health` dá o mesmo dado em JSON, sob demanda.
 
 Guia completo (arquitetura, protocolos, teste com o simulador, configuração
 do gpredict, teste entre duas máquinas, troubleshooting) em

@@ -72,16 +72,19 @@ sem "Protocol error", ou `http://127.0.0.1:5590` mostra "rotor: ativo".
 ### 3. Teste completo (rotor real via ZMQ + simulador do Rotor Manager)
 
 Mesma coisa, mas com `rotor_simulator.py` no lugar do hardware e
-`--rotor zmq` no Station Manager — veja "Teste completo" abaixo. Isso
-exercita a cadeia inteira: GRS Manager → Station Manager → Rotor Manager →
-rotor. Validação: mandar `P <az> <el>` via `rotctl` e ver
-`[Simulator] SET POSITION -> ...` aparecer no terminal do simulador.
+`--rotor zmq` no Station Manager, ainda tudo em `127.0.0.1` — veja "Teste
+completo com o gpredict real" abaixo (os três primeiros comandos, sem se
+preocupar com `--host` ainda). Isso exercita a cadeia inteira: GRS Manager →
+Station Manager → Rotor Manager → rotor. Validação: mandar `P <az> <el>`
+via `rotctl` e ver `[Simulator] SET POSITION -> ...` aparecer no terminal
+do simulador.
 
 ### 4. Validação com o gpredict real, em outra máquina (o teste completo)
 
 Os mesmos três processos do passo 3, mas com o GRS Manager escutando no IP
-da rede local (`--host <IP> --status-host <IP>`) — veja "Testar com o
-gpredict numa máquina separada" e "Configurando o gpredict" abaixo.
+da rede local (`--host <IP> --status-host <IP>`, ou `0.0.0.0`) — veja
+"Teste completo com o gpredict real" (comando exato do Terminal 3) e
+"Configurando o gpredict" abaixo.
 
 Critérios de sucesso, nessa ordem:
 1. `rotctl -m 2 -r <IP>:4533` (rodando na própria máquina do gpredict)
@@ -141,46 +144,77 @@ Aponte o gpredict (ou o `rotctl`, ver abaixo) pro **GRS Manager**
 (`127.0.0.1:4533`) — nunca direto no Station Manager, que não fala mais
 rotctld.
 
-## Teste completo (rotor via ZMQ + simulador do Rotor Manager)
+## Teste completo com o gpredict real (3 terminais)
 
-Quatro terminais:
+Esse é o setup padrão pra testar com o gpredict de verdade, rodando numa VM
+(ou outra máquina) separada — rotor via ZMQ (não mock). Três terminais
+**nesta máquina** (a que sobe os serviços, não a do gpredict), **nessa
+ordem**:
+
+### Terminal 1 — simulador do rotor
 
 ```powershell
-# Terminal 1 — simulador do rotor (finge ser o Rotor Controller físico)
 python -u vendor\grs-rotor-manager\rotor_simulator.py
-
-# Terminal 2 — Station Manager, agora com --rotor zmq
-python -m mgm8.rotor_zmq.main --rotor zmq --rotor-address tcp://127.0.0.1:5559
-
-# Terminal 3 — GRS Manager
-python -m grs_manager.main
-
-# Terminal 4 — gpredict ou rotctl, apontando pro GRS Manager (127.0.0.1:4533)
 ```
 
-Portas padrão usadas nesse pipeline:
+Finge ser o **Rotor Controller** físico (o hardware AlfaSpid). Sem ele, o
+Station Manager não tem com quem falar no modo `--rotor zmq`. Escuta em
+`127.0.0.1:5559` (comandos) e `:5560` (status) — portas fixas do
+`grs-rotor-manager`, não são configuráveis por aqui.
+
+### Terminal 2 — Station Manager
+
+```powershell
+python -m mgm8.rotor_zmq.main --rotor zmq --rotor-address tcp://127.0.0.1:5559
+```
+
+É o núcleo (`mgm8`): recebe comandos do GRS Manager via ZMQ — escuta em
+`127.0.0.1:5580`, **sempre loopback**, porque o GRS Manager roda nesta
+mesma máquina, nunca na VM — e repassa pro simulador do Terminal 1.
+`--rotor-address` é a porta de comandos do Terminal 1.
+
+### Terminal 3 — GRS Manager
+
+```powershell
+python -m grs_manager.main --host 172.16.10.78 --status-host 172.16.10.78
+```
+
+É quem o gpredict (na VM) enxerga. **O `--host` é obrigatório e precisa ser
+o IP desta máquina na rede local** (confirme com `ipconfig`) — sem ele, o
+padrão é `127.0.0.1` (loopback), a VM **não alcança de jeito nenhum**, e a
+conexão falha sempre. Isso não é bug do gpredict — confira sempre esse
+comando primeiro antes de desconfiar de outra coisa. `--status-host` faz o
+painel de status também ficar acessível de fora desta máquina
+(`http://<IP>:5590`).
+
+**Alternativa que evita esquecer/errar o IP:** troque `172.16.10.78` nos
+dois `--host` por `0.0.0.0` — escuta em todas as interfaces de rede desta
+máquina, então funciona não importa qual IP a VM usa pra chegar até aqui.
+Contrapartida: fica acessível por qualquer rede conectada a esta máquina
+(incluindo VPN, se tiver uma ativa) — aceitável pra teste, evitar deixar
+assim de forma permanente.
+
+### Depois dos três de pé
+
+Configura/abre o gpredict na VM apontando pro IP desta máquina, porta
+`4533` (ver "Configurando o gpredict" abaixo). Acompanha pelo painel de
+status (`http://<IP ou 0.0.0.0>:5590`) — atualiza sozinho, ao vivo.
+
+Portas usadas nesse pipeline:
 
 | Porta | Serviço | Papel |
 |---|---|---|
 | `4533` | GRS Manager | rotctld (gpredict conecta aqui) |
+| `5590` | GRS Manager | painel de status HTTP |
 | `5580` | Station Manager | ZMQ REP (GRS Manager conecta aqui) |
 | `5559` | Rotor Manager | ZMQ PUSH/PULL de comandos (Station Manager conecta aqui) |
 | `5560` | Rotor Manager | ZMQ PUB/SUB de status (fixo, não configurável) |
 
-## Testar com o gpredict numa máquina separada
-
-Se o gpredict roda numa máquina diferente da que sobe o GRS Manager, é o
-**GRS Manager** que precisa escutar no IP da rede local (o Station Manager
-pode continuar em `127.0.0.1`, já que só o GRS Manager fala com ele):
-
-```powershell
-python -m grs_manager.main --host <IP_DESTA_MAQUINA> --port 4533
-```
-
-Checklist se a conexão não chegar: firewall do Windows liberando `python.exe`
-na porta usada, teste de conectividade a partir da máquina do gpredict
-(`Test-NetConnection -ComputerName <IP> -Port 4533`), e confirmar que as duas
-máquinas estão na mesma sub-rede.
+Checklist se a conexão ainda não chegar depois de conferir o `--host`:
+firewall do Windows liberando `python.exe` na porta usada, teste de
+conectividade a partir da VM (`Test-NetConnection -ComputerName <IP> -Port
+4533` no Windows, ou `nc -zv <IP> 4533` no Linux), e confirmar que as duas
+máquinas estão na mesma sub-rede (`ping`).
 
 ## Configurando o gpredict
 
@@ -206,8 +240,9 @@ O GRS Manager sobe, na mesma chamada de `main.py`, um painel HTTP (Flask,
 numa thread separada) em `http://127.0.0.1:5590` por padrão
 (`--status-host`/`--status-port` pra mudar, `--no-status` pra desligar):
 
-- **`GET /`** — página HTML (auto-atualiza a cada 5s) com dois indicadores: gpredict conectado (+ último alvo pedido) e rotor respondendo (+ posição atual).
-- **`GET /health`** — mesmo dado em JSON:
+- **`GET /`** — página HTML com dois indicadores: gpredict conectado (+ último alvo pedido) e rotor respondendo (+ posição atual). Atualiza **ao vivo** via Server-Sent Events (`/events`), sem recarregar a página — o rodapé mostra "ao vivo" (ou "conexão perdida, tentando reconectar..." se o navegador perder a conexão com o painel; o `EventSource` do navegador reconecta sozinho).
+- **`GET /events`** — o stream SSE em si (`text/event-stream`): manda o mesmo JSON de `/health` a cada 2s (`SSE_INTERVAL_SECONDS`). Dá pra consumir de qualquer lugar que fale SSE, não só da página HTML — `curl -N http://<host>:5590/events`, por exemplo.
+- **`GET /health`** — mesmo dado em JSON, mas sob demanda (uma leitura por requisição, sem stream):
   ```json
   {
     "gpredict_connected": true,
