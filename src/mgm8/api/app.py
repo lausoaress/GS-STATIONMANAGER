@@ -7,13 +7,16 @@ from mgm8.application.pass_scheduler import PassSchedulerService, SchedulePassRe
 from mgm8.domain.services import SchedulingConflictDetector
 from mgm8.infrastructure.in_memory import (InMemoryOperationalEventRepository, InMemoryScheduledPassRepository,
                                              InMemorySchedulingConflictRepository)
+from mgm8.web.routes import web_bp
 
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.config["SECRET_KEY"] = "dev-secret-key-change-in-production"
     service = PassSchedulerService(InMemoryScheduledPassRepository(), InMemorySchedulingConflictRepository(),
                                    InMemoryOperationalEventRepository(), SchedulingConflictDetector())
     app.config["PASS_SCHEDULER"] = service
+    app.register_blueprint(web_bp)
 
     @app.get("/health")
     def health() -> tuple[dict[str, str], int]:

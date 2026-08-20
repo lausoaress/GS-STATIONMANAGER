@@ -24,6 +24,14 @@ class InMemoryScheduledPassRepository:
     def add(self, scheduled_pass: ScheduledPass) -> None:
         self.passes[scheduled_pass.id] = scheduled_pass
 
+    def list_all(self) -> list[ScheduledPass]:
+        return sorted(self.passes.values(), key=lambda item: item.window.aos, reverse=True)
+
+    def update(self, scheduled_pass: ScheduledPass) -> None:
+        if scheduled_pass.id not in self.passes:
+            raise KeyError(f"Pass {scheduled_pass.id} not found.")
+        self.passes[scheduled_pass.id] = scheduled_pass
+
 
 class InMemorySchedulingConflictRepository:
     def __init__(self) -> None:
@@ -32,6 +40,9 @@ class InMemorySchedulingConflictRepository:
     def add(self, conflict: SchedulingConflict) -> None:
         self.conflicts.append(conflict)
 
+    def list_recent(self, limit: int = 20) -> list[SchedulingConflict]:
+        return sorted(self.conflicts, key=lambda item: item.detected_at, reverse=True)[:limit]
+
 
 class InMemoryOperationalEventRepository:
     def __init__(self) -> None:
@@ -39,3 +50,6 @@ class InMemoryOperationalEventRepository:
 
     def add(self, event: OperationalEvent) -> None:
         self.events.append(event)
+
+    def list_recent(self, limit: int = 50) -> list[OperationalEvent]:
+        return sorted(self.events, key=lambda item: item.occurred_at, reverse=True)[:limit]

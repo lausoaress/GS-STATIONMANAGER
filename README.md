@@ -11,11 +11,20 @@ src/mgm8/
 ├── api/             # Adaptador HTTP Flask
 ├── application/     # Casos de uso
 ├── domain/          # Entidades, value objects, portas e regras de negócio
-└── infrastructure/  # Adaptadores de persistência (em memória por enquanto)
+├── infrastructure/  # Adaptadores de persistência (em memória por enquanto)
+└── web/             # Interface web Mission Control (Jinja2)
 tests/               # Testes pytest
 ```
 
 ### Executar localmente
+
+```powershell
+.\run.ps1
+```
+
+O script cria o `.venv` se necessário, instala as dependências e sobe o Flask em `http://127.0.0.1:5000`. Para outra porta: `.\run.ps1 -Port 5001`.
+
+Alternativa manual:
 
 ```powershell
 py -3.11 -m venv .venv
@@ -24,7 +33,7 @@ python -m pip install -e ".[dev]"
 flask --app mgm8.api.app run --debug
 ```
 
-A API expõe `GET /health` e `POST /api/passes`. Veja o exemplo de payload em `tests/test_api.py`.
+A API expõe `GET /health` e `POST /api/passes`. A interface web Mission Control (adaptada do [grs-tc-generator](https://github.com/spacelab-ufsc/grs-tc-generator)) está disponível em `GET /`.
 
 ### Testes
 
