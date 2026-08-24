@@ -84,24 +84,23 @@ def test_dump_state_handshake_works_through_grs_manager(pipeline):
 
 
 def test_status_app_reflects_real_pipeline_health(pipeline):
+    """O painel lê a posição do rotor de verdade, atravessando os dois hops.
+
+    `rotor_connected` só é True se a cadeia inteira (painel -> Station Manager
+    -> rotor) respondeu — é essa a saúde que a página reporta.
+    """
     status_client = StationManagerZmqClient(pipeline.station_manager_endpoint, timeout_ms=1000)
     try:
-        app = create_app(pipeline.grs_manager, status_client)
+        app = create_app(status_client)
         client = app.test_client()
 
-        # antes de qualquer conexão do gpredict: rotor ativo, sem alvo ainda.
-        health = client.get("/health").get_json()
-        assert health["gpredict_connected"] is False
-        assert health["gpredict_last_target"] is None
-        assert health["rotor_connected"] is True
+        assert client.get("/health").get_json()["rotor_connected"] is True
 
         with socket.create_connection(pipeline.grs_manager.server_address, timeout=2) as sock:
             sock.sendall(b"P 55.5 12.5\n")
             sock.recv(4096)
 
             health = client.get("/health").get_json()
-            assert health["gpredict_connected"] is True
-            assert health["gpredict_last_target"] == {"azimuth_degrees": 55.5, "elevation_degrees": 12.5}
             assert health["rotor_position"] == {"azimuth_degrees": 55.5, "elevation_degrees": 12.5}
     finally:
         status_client.close()

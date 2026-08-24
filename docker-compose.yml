@@ -84,10 +84,29 @@ services:
     ports:
       - "4533:4533"   # rotctld (hamlib) — é aqui que o gpredict conecta
       - "5590:5590"   # painel de status (SSE)
+    environment:
+      # Somente leitura: o painel mostra o plano e a posição dos satélites que
+      # o TC Scheduler escreve. Quem grava continua sendo só o Scheduler.
+      # Sem esta variável o painel funciona igual, só sem a parte de satélites.
+      PG_DATABASE_URL: postgresql+psycopg2://${DB_USER:-admin}:${DB_PASSWORD:-admin}@postgres:5432/${DB_NAME:-tc_generator}
+      # Resolvido pelo navegador do operador (os links de telecomando abrem o
+      # TC Generator), e não pelo container — por isso localhost.
+      TC_GENERATOR_URL: ${TC_GENERATOR_URL:-http://localhost:5000}
+      # Mesmas coordenadas do resto da estação: o modal mostra a posição da
+      # estação e o apontamento calculado a partir dela.
+      GS_NAME: ${GS_NAME:-Estação de Teste}
+      GS_LATITUDE_DEG: ${GS_LATITUDE_DEG:--23.5505}
+      GS_LONGITUDE_DEG: ${GS_LONGITUDE_DEG:--46.6333}
+      GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
+      TRACKING_DATA_DIR: /app/data
     depends_on:
       - station-manager
     volumes:
       - ./src:/app/src
+      - ./libs:/app/libs
+      # Mesmo cache de TLE do Scheduler: sem ele, cada abertura de modal de um
+      # satélite ainda não visto iria ao CelesTrak de novo.
+      - tracking_data:/app/data
     networks:
       - spacelab-network
 
