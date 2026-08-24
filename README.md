@@ -20,12 +20,49 @@ src/grs_manager/      # GRS Manager (Control Desktop) — processo separado
 ├── adapters/        # Adaptador de saída: cliente ZMQ pro Station Manager
 └── status/          # Painel HTTP (Flask): gpredict conectado? rotor respondendo?
 
+services/            # Submódulos git — outros blocos da estação, orquestrados pelo compose
+└── grs-tc-generator/    # Satellite TC Generator (Control Desktop)
+
 vendor/grs-rotor-manager/  # Submódulo git — Rotor Manager (Station Server), protocolo Rot2Prog
+docker/              # Dockerfile da imagem que serve mgm8 e grs_manager
 tests/               # Testes pytest
 tools/               # Scripts de diagnóstico (ex.: rotctld_spy.py)
 ```
 
-### Executar localmente
+## Subir a estação completa (Docker)
+
+Este repositório é o **orquestrador**: o `docker-compose.yml` da raiz é o único
+compose da estação integrada. Cada bloco continua sendo um repositório
+independente, com o seu próprio Dockerfile e o seu próprio compose para rodar
+sozinho — o orquestrador não importa o compose de ninguém, apenas declara a
+infra compartilhada (um postgres, uma rede) e constrói cada serviço a partir do
+submódulo correspondente em `services/`.
+
+```powershell
+git submodule update --init --recursive
+cp .env.example .env
+docker compose up -d --build
+```
+
+| Serviço | Porta | O que é |
+|---|---|---|
+| `tc-generator-web` | 5000 | Interface web de telecomandos |
+| `pgadmin` | 5050 | Administração do banco |
+| `postgres` | 5432 | Banco `tc_generator`, compartilhado |
+| `grs-manager` | 4533 | rotctld (hamlib) — **é aqui que o gpredict conecta** |
+| `grs-manager` | 5590 | Painel de status ao vivo |
+| `station-manager` | 5580 | ZMQ REP — comandos de rotor |
+
+O `station-manager` sobe com `--rotor mock`. O caminho Rot2Prog real não
+funciona entre containers porque o `RotorManager` vendorizado tem o socket SUB
+fixo em `tcp://localhost:5560`; para rodar contra o rotor físico ou o simulador,
+use os processos locais descritos abaixo.
+
+As mudanças de schema do banco só são aplicadas na **primeira** subida de um
+volume vazio (`docker-entrypoint-initdb.d`). Para reaplicar do zero:
+`docker compose down -v` — isso **apaga** os dados existentes.
+
+### Executar localmente (sem Docker)
 
 ```powershell
 git submodule update --init --recursive

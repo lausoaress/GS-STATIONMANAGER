@@ -1,0 +1,122 @@
+# Compose único da estação terrestre.
+#
+# Cada bloco continua sendo um repositório independente com o seu próprio
+# Dockerfile e o seu próprio compose (para rodar sozinho em desenvolvimento).
+# Este arquivo não importa o compose de ninguém: declara a infra compartilhada
+# (um postgres, uma rede) e constrói cada serviço apontando o build context
+# para o diretório do submódulo correspondente em services/.
+
+services:
+  # --- Infraestrutura compartilhada ---
+  postgres:
+    image: postgres:15-alpine
+    container_name: spacelab-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-admin}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-admin}
+      POSTGRES_DB: ${DB_NAME:-tc_generator}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # O prefixo numérico fixa a ordem: o entrypoint do postgres roda os .sql
+      # em ordem alfabética, e o DDL do orquestrador (02-*) depende das tabelas
+      # que o schema do TC Generator (01-*) cria.
+      - ./services/grs-tc-generator/resources/database/schema.sql:/docker-entrypoint-initdb.d/01-tc-generator.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-admin} -d ${DB_NAME:-tc_generator}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - spacelab-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: spacelab-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@spacelab.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      - "5050:80"
+    depends_on:
+      postgres:
+        condition: service_started
+    networks:
+      - spacelab-network
+
+  # --- Control Desktop ---
+  tc-generator-web:
+    build: ./services/grs-tc-generator
+    container_name: spacelab-tc-generator
+    ports:
+      - "5000:5000"
+    environment:
+      PG_DATABASE_URL: postgresql+psycopg2://${DB_USER:-admin}:${DB_PASSWORD:-admin}@postgres:5432/${DB_NAME:-tc_generator}
+      FLASK_APP: run.py
+      FLASK_DEBUG: ${FLASK_DEBUG:-1}
+      SECRET_KEY: ${SECRET_KEY:-dev-secret-key-change-in-production}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./services/grs-tc-generator/app:/app/app
+      - ./services/grs-tc-generator/run.py:/app/run.py
+    networks:
+      - spacelab-network
+
+  grs-manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: spacelab-grs-manager
+    # --host/--status-host precisam ser 0.0.0.0: os defaults são 127.0.0.1, que
+    # dentro do container não aceitam conexão vinda de fora dele.
+    command:
+      - python
+      - -m
+      - grs_manager.main
+      - --host=0.0.0.0
+      - --port=4533
+      - --station-manager-address=tcp://station-manager:5580
+      - --status-host=0.0.0.0
+      - --status-port=5590
+    ports:
+      - "4533:4533"   # rotctld (hamlib) — é aqui que o gpredict conecta
+      - "5590:5590"   # painel de status (SSE)
+    depends_on:
+      - station-manager
+    volumes:
+      - ./src:/app/src
+    networks:
+      - spacelab-network
+
+  # --- Control Server ---
+  station-manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: spacelab-station-manager
+    # --rotor mock, e não zmq: o RotorManager vendorizado tem o socket SUB fixo
+    # em tcp://localhost:5560 (vendor/grs-rotor-manager/rotor_manager.py), o que
+    # só funciona com o simulador no mesmo host de rede — nunca entre containers.
+    # Rodar contra o rotor físico/simulado continua sendo fora do Docker.
+    command:
+      - python
+      - -m
+      - mgm8.rotor_zmq.main
+      - --bind=tcp://0.0.0.0:5580
+      - --rotor=mock
+    ports:
+      - "5580:5580"   # ZMQ REP — comandos de rotor
+    volumes:
+      - ./src:/app/src
+    networks:
+      - spacelab-network
+
+volumes:
+  postgres_data:
+
+networks:
+  spacelab-network:
+    driver: bridge
