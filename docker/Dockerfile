@@ -12,9 +12,19 @@ WORKDIR /app
 
 # README.md é exigido no build: pyproject.toml declara `readme = "README.md"`.
 COPY pyproject.toml README.md ./
+COPY libs/ ./libs/
 COPY src/ ./src/
 COPY vendor/ ./vendor/
 
-# Editable para que o bind mount de ./src no compose reflita mudanças sem rebuild.
-# O extra [zmq] traz o pyzmq, que os dois adapters de rede precisam.
-RUN pip install --no-cache-dir -e ".[zmq]"
+# spacelab-tracking é instalada à parte, e não como dependência declarada no
+# pyproject: ela não está num índice de pacotes, e caminhos relativos em
+# `dependencies` não são portáveis com setuptools.
+#
+# Editable nos dois para que os bind mounts de ./src e ./libs no compose
+# reflitam mudanças sem rebuild. O extra [zmq] traz o pyzmq, que os adapters
+# de rede precisam.
+RUN pip install --no-cache-dir -e ./libs/spacelab-tracking -e ".[zmq]"
+
+# Cache local de dados orbitais (TRACKING_DATA_DIR). Montado como volume no
+# compose, para que o fallback offline do celestrak sobreviva a um restart.
+RUN mkdir -p /app/data

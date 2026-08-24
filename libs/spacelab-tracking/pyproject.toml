@@ -3,20 +3,18 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "mgm8"
+name = "spacelab-tracking"
 version = "0.1.0"
-description = "Ground Station Manager"
+description = "Propagação orbital SGP4 e previsão de passagens para a estação terrestre SpaceLab"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["Flask>=3.0,<4.0"]
+dependencies = [
+    "sgp4>=2.23",
+    "requests>=2.31",
+]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0"]
-zmq = ["pyzmq>=25,<26"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests", "libs/spacelab-tracking/tests"]
-pythonpath = ["src"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
