@@ -14,6 +14,13 @@ src/mgm8/            # Station Manager (Control Server)
 ├── infrastructure/  # Adaptadores de saída (persistência em memória, rotor mock/ZMQ)
 └── rotor_zmq/        # Adaptador de entrada ZMQ: controle de rotor pro GRS Manager
 
+src/tc_scheduler/    # TC Scheduler (Control Server) — decide o que rastrear
+├── planner.py       # Escolha de passagens: onde mora a autonomia
+├── db.py            # Leitura/escrita no banco do TC Generator (SQL puro)
+└── station_manager.py  # Cliente ZMQ pro Station Manager
+
+libs/spacelab-tracking/  # Satellite Tracker — SGP4, CelesTrak, previsão de passagens
+
 src/grs_manager/      # GRS Manager (Control Desktop) — processo separado
 ├── domain/          # Portas e value objects próprios (não compartilha código com o mgm8)
 ├── rotctld/         # Adaptador de entrada: bridge TCP compatível com rotctld (gpredict)
@@ -51,7 +58,8 @@ docker compose up -d --build
 | `postgres` | 5432 | Banco `tc_generator`, compartilhado |
 | `grs-manager` | 4533 | rotctld (hamlib) — **é aqui que o gpredict conecta** |
 | `grs-manager` | 5590 | Painel de status ao vivo |
-| `station-manager` | 5580 | ZMQ REP — comandos de rotor |
+| `station-manager` | 5580 | ZMQ REP — comandos de rotor e rastreamento |
+| `tc-scheduler` | — | Decide o que rastrear (sem porta: só consome) |
 
 O `station-manager` sobe com `--rotor mock`. O caminho Rot2Prog real não
 funciona entre containers porque o `RotorManager` vendorizado tem o socket SUB
@@ -61,6 +69,41 @@ use os processos locais descritos abaixo.
 As mudanças de schema do banco só são aplicadas na **primeira** subida de um
 volume vazio (`docker-entrypoint-initdb.d`). Para reaplicar do zero:
 `docker compose down -v` — isso **apaga** os dados existentes.
+
+### Operação autônoma
+
+Dois modos convivem, e os dois terminam no mesmo rotor:
+
+- **Manual**: o gpredict conecta no GRS Manager (rotctld), que repassa cada
+  setpoint ao Station Manager. Um humano decide o que acompanhar.
+- **Autônomo**: o TC Scheduler lê os telecomandos pendentes, prevê as passagens
+  dos satélites correspondentes e entrega a passagem inteira ao Station Manager
+  numa ordem só (`track_satellite`), que conduz o apontamento até o LOS.
+
+O laço de tempo real fica no Station Manager, e não no Scheduler, para que um
+replanejamento pesado não atrase o rotor e para que uma queda do Scheduler no
+meio de uma passagem não a interrompa.
+
+Para habilitar o agendamento automático, cada satélite precisa de dados
+orbitais — o `norad_id` fica nulo de propósito no seed, porque um identificador
+errado faria a estação apontar para outro objeto sem nenhum erro visível:
+
+```sql
+UPDATE satellites SET norad_id = 25544 WHERE code = 'SAT-001';
+```
+
+Ajuste também as coordenadas da estação no `.env` (`GS_LATITUDE_DEG`,
+`GS_LONGITUDE_DEG`, `GS_ALTITUDE_M`): os defaults são um exemplo de São Paulo.
+
+Para conferir o cálculo orbital contra uma ferramenta independente:
+
+```powershell
+python -m spacelab_tracking.cli --norad-id 25544 --next-pass
+python -m spacelab_tracking.cli --norad-id 25544 --export-tle iss.tle
+```
+
+Importe `iss.tle` no Gpredict e compare AOS, LOS e elevação máxima. Detalhes em
+[`libs/spacelab-tracking/README.md`](libs/spacelab-tracking/README.md).
 
 ### Executar localmente (sem Docker)
 

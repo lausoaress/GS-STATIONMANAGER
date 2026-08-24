@@ -10,9 +10,15 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["Flask>=3.0,<4.0"]
 
+# spacelab-tracking e o driver do Postgres não entram em `dependencies`: a
+# primeira não está num índice de pacotes (é instalada de libs/ por caminho
+# local, e caminhos relativos aqui não são portáveis com setuptools), e o
+# segundo só é necessário para o TC Scheduler. Ver docker/Dockerfile.
+
 [project.optional-dependencies]
 dev = ["pytest>=8.0,<9.0"]
 zmq = ["pyzmq>=25,<26"]
+scheduler = ["SQLAlchemy>=2.0,<3.0", "psycopg2-binary>=2.9"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "libs/spacelab-tracking/tests"]

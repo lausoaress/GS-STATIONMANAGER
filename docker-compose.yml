@@ -92,6 +92,39 @@ services:
       - spacelab-network
 
   # --- Control Server ---
+  tc-scheduler:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: spacelab-tc-scheduler
+    command: ["python", "-m", "tc_scheduler.main"]
+    environment:
+      PG_DATABASE_URL: postgresql+psycopg2://${DB_USER:-admin}:${DB_PASSWORD:-admin}@postgres:5432/${DB_NAME:-tc_generator}
+      STATION_MANAGER_ZMQ_ADDRESS: tcp://station-manager:5580
+      SCHEDULER_HORIZON_HOURS: ${SCHEDULER_HORIZON_HOURS:-24}
+      SCHEDULER_REPLAN_INTERVAL_SECONDS: ${SCHEDULER_REPLAN_INTERVAL_SECONDS:-300}
+      TRACKING_POLL_INTERVAL_SECONDS: ${TRACKING_POLL_INTERVAL_SECONDS:-30}
+      # Coordenadas da estação. Os defaults da biblioteca são um EXEMPLO
+      # (São Paulo) e precisam ser trocados pelos da estação real.
+      GS_NAME: ${GS_NAME:-Estação de Teste}
+      GS_LATITUDE_DEG: ${GS_LATITUDE_DEG:--23.5505}
+      GS_LONGITUDE_DEG: ${GS_LONGITUDE_DEG:--46.6333}
+      GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
+      GS_MIN_ELEVATION_DEG: ${GS_MIN_ELEVATION_DEG:-0}
+      TRACKING_DATA_DIR: /app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      station-manager:
+        condition: service_started
+    volumes:
+      - ./src:/app/src
+      - ./libs:/app/libs
+      # Cache de TLE: preserva o fallback offline do celestrak entre restarts.
+      - tracking_data:/app/data
+    networks:
+      - spacelab-network
+
   station-manager:
     build:
       context: .
@@ -109,13 +142,22 @@ services:
       - --rotor=mock
     ports:
       - "5580:5580"   # ZMQ REP — comandos de rotor
+    environment:
+      # Mesmas coordenadas do TC Scheduler: os dois precisam concordar sobre de
+      # onde a estação observa, ou o plano e o apontamento divergem.
+      GS_NAME: ${GS_NAME:-Estação de Teste}
+      GS_LATITUDE_DEG: ${GS_LATITUDE_DEG:--23.5505}
+      GS_LONGITUDE_DEG: ${GS_LONGITUDE_DEG:--46.6333}
+      GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
     volumes:
       - ./src:/app/src
+      - ./libs:/app/libs
     networks:
       - spacelab-network
 
 volumes:
   postgres_data:
+  tracking_data:
 
 networks:
   spacelab-network:
