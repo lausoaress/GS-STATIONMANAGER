@@ -105,6 +105,53 @@ python -m spacelab_tracking.cli --norad-id 25544 --export-tle iss.tle
 Importe `iss.tle` no Gpredict e compare AOS, LOS e elevação máxima. Detalhes em
 [`libs/spacelab-tracking/README.md`](libs/spacelab-tracking/README.md).
 
+### Ver o fluxo funcionando
+
+O fluxo autônomo acontece em três processos, então o estado fica espalhado
+entre banco, scheduler e Station Manager. O monitor junta os três:
+
+```powershell
+docker compose exec tc-scheduler python -m tc_scheduler.monitor --watch
+```
+
+Mostra onde está cada satélite, o plano de passagens, o que o Station Manager
+está rastreando, a posição do rotor e a fila de telecomandos — tudo no mesmo
+retrato, atualizando a cada segundo.
+
+Para exercitar o ciclo completo sem esperar a próxima passagem real (que pode
+estar a horas de distância), `tools/station_demo.py`:
+
+```powershell
+# 1. Dá dados orbitais ao satélite e devolve os telecomandos à fila
+docker compose exec tc-scheduler python tools/station_demo.py prepare --code SAT-001 --norad-id 25544
+
+# 2. Força um replanejamento — este passo é real, com dados do CelesTrak
+docker compose restart tc-scheduler
+docker compose logs -f tc-scheduler
+
+# 3. Acompanhe (em outro terminal)
+docker compose exec tc-scheduler python -m tc_scheduler.monitor --watch
+
+# 4. Dispara uma janela começando agora, em vez de esperar o AOS real
+docker compose exec tc-scheduler python tools/station_demo.py simulate-pass --code SAT-001 --duration 120
+
+# 5. Volta ao estado inicial quando terminar
+docker compose exec tc-scheduler python tools/station_demo.py reset
+```
+
+O passo 4 é o único encenado: ele insere uma janela artificial (com os ângulos
+reais do satélite naquele instante), pulando o planejador. Todo o resto do
+caminho é o de produção — ativação no AOS, envio ao Station Manager,
+apontamento e encerramento no LOS.
+
+Se o satélite estiver abaixo do horizonte na hora do teste, o Station Manager
+calcula o apontamento mas não move o rotor, porque seguir um alvo do outro lado
+da Terra só castigaria o hardware. Para o rotor se mexer mesmo assim:
+
+```powershell
+$env:STATION_POINTING_MIN_ELEVATION="-90"; docker compose up -d station-manager
+```
+
 ### Executar localmente (sem Docker)
 
 ```powershell

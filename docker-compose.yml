@@ -120,6 +120,7 @@ services:
     volumes:
       - ./src:/app/src
       - ./libs:/app/libs
+      - ./tools:/app/tools
       # Cache de TLE: preserva o fallback offline do celestrak entre restarts.
       - tracking_data:/app/data
     networks:
@@ -140,6 +141,11 @@ services:
       - mgm8.rotor_zmq.main
       - --bind=tcp://0.0.0.0:5580
       - --rotor=mock
+      # Abaixo desta elevação o satélite está do outro lado da Terra e o azimute
+      # varia de forma abrupta — seguir isso só castigaria o rotor. Baixe para
+      # -90 quando quiser exercitar o apontamento sem esperar uma passagem real.
+      - --pointing-min-elevation=${STATION_POINTING_MIN_ELEVATION:-0}
+      - --pointing-interval=${STATION_POINTING_INTERVAL_SECONDS:-1}
     ports:
       - "5580:5580"   # ZMQ REP — comandos de rotor
     environment:

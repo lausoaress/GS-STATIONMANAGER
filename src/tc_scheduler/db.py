@@ -103,6 +103,44 @@ def fetch_satellites_with_orbital_data(conn: Connection) -> list[dict[str, Any]]
     """)).mappings().all()]
 
 
+def fetch_station_overview(conn: Connection) -> dict[str, Any]:
+    """Tudo o que o monitor precisa, numa transação só.
+
+    Ler em partes daria um retrato inconsistente: o plano de um instante com as
+    posições de outro, justamente quando algo está mudando.
+    """
+    satellites = [dict(row) for row in conn.execute(text("""
+        SELECT s.id, s.name, s.code, s.norad_id, s.status,
+               (s.tle_line1 IS NOT NULL AND s.tle_line2 IS NOT NULL) AS has_manual_tle,
+               ts.latitude_deg, ts.longitude_deg, ts.altitude_km,
+               ts.azimuth_deg, ts.elevation_deg, ts.range_km,
+               ts.is_visible, ts.data_source, ts.status_message, ts.checked_at
+        FROM satellites s
+        LEFT JOIN satellite_tracking_status ts ON ts.satellite_id = s.id
+        ORDER BY s.id
+    """)).mappings().all()]
+
+    plan = [dict(row) for row in conn.execute(text("""
+        SELECT p.id, p.satellite_id, s.name AS satellite_name,
+               p.aos_time, p.los_time, p.max_elevation_deg, p.status,
+               p.status_message, p.data_source,
+               (SELECT COUNT(*) FROM telecommands t WHERE t.scheduled_pass_id = p.id)
+                   AS telecommand_count
+        FROM scheduled_passes p
+        JOIN satellites s ON s.id = p.satellite_id
+        WHERE p.status IN ('planned', 'active')
+           OR p.los_time > now() - interval '1 hour'
+        ORDER BY p.aos_time
+        LIMIT 10
+    """)).mappings().all()]
+
+    counts = {row["status"]: row["total"] for row in conn.execute(text("""
+        SELECT status, COUNT(*) AS total FROM telecommands GROUP BY status
+    """)).mappings().all()}
+
+    return {"satellites": satellites, "plan": plan, "telecommand_counts": counts}
+
+
 def fetch_pass_to_activate(conn: Connection, now: datetime) -> Optional[dict[str, Any]]:
     """Passagem planejada cuja janela já começou e ainda não terminou."""
     row = conn.execute(text("""
@@ -137,18 +175,26 @@ def fetch_active_pass(conn: Connection) -> Optional[dict[str, Any]]:
 def clear_planned_passes(conn: Connection) -> int:
     """Descarta o plano ainda não iniciado, devolvendo os telecomandos à fila.
 
-    Só mexe em passagens 'planned': uma passagem 'active' está acontecendo
-    agora, com o rotor em movimento, e replanejar não pode interrompê-la.
+    Só apaga passagens 'planned': uma passagem 'active' está acontecendo agora,
+    com o rotor em movimento, e replanejar não pode interrompê-la.
 
-    Os telecomandos voltam a 'pending' explicitamente — o ON DELETE SET NULL da
-    FK zera o vínculo, mas deixaria o status em 'queued', ou seja, comandos
-    presos numa passagem que não existe mais.
+    Devolve à fila também os telecomandos de passagens 'cancelled' e 'missed'.
+    Elas não são apagadas (o histórico de por que uma janela não aconteceu tem
+    valor), mas os comandos presos nelas precisam voltar a circular — do
+    contrário ficariam para sempre em 'queued', apontando para uma passagem que
+    não vai acontecer, e nenhum replanejamento os veria de novo.
+
+    O status volta a 'pending' explicitamente: o ON DELETE SET NULL da FK zera
+    o vínculo, mas deixaria o status em 'queued'.
     """
     conn.execute(text("""
         UPDATE telecommands
         SET status = 'pending', scheduled_pass_id = NULL
-        WHERE scheduled_pass_id IN (SELECT id FROM scheduled_passes WHERE status = 'planned')
-          AND status = 'queued'
+        WHERE status = 'queued'
+          AND scheduled_pass_id IN (
+              SELECT id FROM scheduled_passes
+              WHERE status IN ('planned', 'cancelled', 'missed')
+          )
     """))
     return conn.execute(text("DELETE FROM scheduled_passes WHERE status = 'planned'")).rowcount
 
