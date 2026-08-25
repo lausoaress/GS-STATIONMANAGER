@@ -215,8 +215,19 @@ class Scheduler:
         now = now_utc()
 
         with self._engine.begin() as conn:
-            for pass_id in db.close_finished_passes(conn, now):
+            finished = db.close_finished_passes(conn, now)
+            for pass_id in finished:
                 logger.info("Passagem %d concluída.", pass_id)
+            if finished:
+                # A janela foi rastreada até o fim, então os comandos dela
+                # saem da fila. Sem encoder não há confirmação de transmissão:
+                # o motivo da marcação fica registrado em execution_logs.
+                marked = db.mark_telecommands_sent(conn, finished)
+                if marked:
+                    logger.info(
+                        "%d telecomandos marcados como enviados ao fim da janela "
+                        "(sem confirmação de transmissão).", marked,
+                    )
 
             missed = db.expire_missed_passes(conn, now)
             if missed:

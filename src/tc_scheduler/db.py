@@ -298,6 +298,45 @@ def close_finished_passes(conn: Connection, now: datetime) -> list[int]:
     return list(rows)
 
 
+# Motivo registrado em execution_logs a cada marcação por fim de janela. A
+# estação não tem encoder nem modulador: ela sabe que rastreou a passagem, não
+# que o rádio transmitiu. Guardar isso aqui mantém a distinção entre um 'sent'
+# inferido e um confirmado — quando os fluxos de dados existirem, o confirmado
+# virá com evidência, e estes continuarão identificáveis por esta mensagem.
+SENT_BY_PASS_COMPLETION = (
+    "marcado como enviado ao fim da janela rastreada; sem confirmação de "
+    "transmissão (estação ainda sem encoder/modulador)"
+)
+
+
+def mark_telecommands_sent(conn: Connection, pass_ids: Iterable[int]) -> int:
+    """Marca como 'sent' os telecomandos das passagens que a estação concluiu.
+
+    Só passagens 'completed' chegam aqui: uma janela perdida devolve os seus
+    comandos à fila (`release_telecommands`), porque nesse caso a estação
+    sequer apontou a antena.
+    """
+    pass_ids = list(pass_ids)
+    if not pass_ids:
+        return 0
+
+    sent = conn.execute(text("""
+        UPDATE telecommands
+        SET status = 'sent', sent_at = now()
+        WHERE scheduled_pass_id = ANY(:pass_ids)
+          AND status = 'queued'
+        RETURNING id
+    """), {"pass_ids": pass_ids}).scalars().all()
+
+    for telecommand_id in sent:
+        conn.execute(text("""
+            INSERT INTO execution_logs (telecommand_id, status, message)
+            VALUES (:telecommand_id, 'sent', :message)
+        """), {"telecommand_id": telecommand_id, "message": SENT_BY_PASS_COMPLETION})
+
+    return len(sent)
+
+
 def upsert_tracking_status(conn: Connection, satellite_id: int, **fields: Any) -> None:
     """Grava a posição corrente de um satélite (uma linha por satélite).
 
