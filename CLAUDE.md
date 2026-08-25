@@ -11,7 +11,7 @@ como submódulos em `services/`.
 | **TC Generator** | `services/grs-tc-generator/` (submódulo) | Interface web: operador cria telecomandos e cadastra satélites |
 | **TC Scheduler** | `src/tc_scheduler/` | Decide o que rastrear e quando |
 | **Station Manager** | `src/mgm8/` | Controla o rotor; rastreia um satélite sozinho durante a passagem |
-| **GRS Manager** | `src/grs_manager/` | Ponte rotctld: é aqui que o gpredict conecta (caminho manual) |
+| **GRS Manager** | `src/grs_manager/` | Painel do operador (rotor + satélites) e ponte rotctld para controle manual |
 | **Satellite Tracker** | `libs/spacelab-tracking/` | Biblioteca: SGP4, CelesTrak, previsão de passagens |
 | **Rotor Manager** | `vendor/grs-rotor-manager/` (submódulo) | Protocolo Rot2Prog, hardware |
 
@@ -42,9 +42,13 @@ docker compose up -d --build
 | TC Generator (web) | 5000 |
 | pgAdmin | 5050 |
 | PostgreSQL | 5432 |
-| GRS Manager (rotctld / status) | 4533 / 5590 |
+| GRS Manager (rotctld / painel) | 4533 / 5590 |
 | Station Manager (ZMQ REP) | 5580 |
 | TC Scheduler | — |
+
+Links, credenciais de desenvolvimento e endpoints em `docs/acessos.md`. A
+confusão mais comum é abrir a 4533 (rotctld, protocolo hamlib) esperando o
+painel, que está na 5590.
 
 Observar o fluxo:
 ```powershell
@@ -59,8 +63,9 @@ Testes: `pytest` na raiz (cobre `tests/` e `libs/spacelab-tracking/tests/`).
 
 **O gpredict foi substituído por tracking próprio.** Ele calcula bem, mas só
 através da interface gráfica — não aceita controle programático, o que impedia
-qualquer automação. O caminho manual (gpredict → GRS Manager → rotctld)
-continua funcionando em paralelo.
+qualquer automação. O servidor rotctld continua de pé na 4533 para quem quiser
+assumir a antena por um cliente hamlib, mas o painel não reporta mais essa
+conexão: destacá-la sugeriria que ela ainda faz parte do fluxo normal.
 
 **O laço de apontamento em tempo real roda no Station Manager, não no
 Scheduler.** Planejar é lento (propagar 24h de N satélites) e apontar é rápido.
@@ -74,11 +79,22 @@ que não se sobrepõem (a estação tem um rotor só).
 
 **O TC Scheduler é o único que escreve no banco.** O Station Manager fica sem
 dependência de Postgres, o que importa se ele um dia rodar na máquina do rádio.
+O painel do GRS Manager **lê** o banco (`status/station_data.py`), e só lê — a
+única escrita dele é no cache de TLE, que é outro recurso.
 
-**Nada marca telecomando como `sent`.** Sem os encoders/moduladores não há como
-saber se foi transmitido. `queued` diz o que é verdade: tem hora marcada para
-sair. Quando os fluxos de dados existirem, o gancho é a tabela
-`execution_logs`, que já existe e já tem aba na UI.
+**O painel do GRS Manager degrada em vez de falhar.** Sem `PG_DATABASE_URL`, ou
+com o Postgres fora do ar, ele volta a ser só o controle de rotor. Uma passagem
+em andamento não pode parar porque o banco caiu.
+
+**O fim da janela marca os telecomandos como `sent`.** Isso afirma mais do que a
+estação observa: ela sabe que rastreou a passagem, não que o rádio transmitiu —
+não há encoder nem modulador. Foi decisão do operador, ciente do limite, porque
+sem isso um comando ficava em `queued` para sempre e a fila de pendentes nunca
+esvaziava. Cada marcação grava um `execution_logs` dizendo que veio do fim da
+janela e não de confirmação (`db.SENT_BY_PASS_COMPLETION`); quando os fluxos de
+dados existirem, um `sent` com evidência será distinguível destes pela mensagem.
+Só passagem `completed` marca `sent` — a `missed` devolve os comandos à fila,
+porque ali a antena nem chegou a apontar.
 
 **`satellites.norad_id` fica NULL no seed.** Um NORAD ID errado não falha: a
 estação simplesmente aponta para outro objeto. Por isso a página `/satellites`
@@ -99,6 +115,28 @@ valida contra o CelesTrak antes de salvar.
   bloquear) vira "site fora do ar" (que deve apenas avisar).
 - **Coordenadas da estação são um exemplo** (São Paulo) nas variáveis `GS_*`.
   Trocar antes de qualquer uso real.
+- **`.panel` nasce `display: none` no `mission-control.css`.** Lá ele é aba de
+  dashboard e espera um `.active` que o JS atribui. Uma página sem abas que
+  reuse a classe precisa redeclarar `display: block`, senão o conteúdo é
+  renderizado e não aparece — foi o que escondeu `/satellites` por inteiro.
+- **Satélite sem telecomando à espera não entra no plano.** `fetch_trackable_
+  satellites` usa `JOIN telecommands`, não `LEFT JOIN`: sem nada a transmitir
+  não há o que agendar. Ele continua aparecendo no painel com posição, porque a
+  posição corrente vem de outra consulta, sem esse filtro. Cadastrar um
+  satélite e estranhar que não há passagem planejada costuma ser isto.
+- **O plano ignora passagens rasantes.** `is_worth_tracking` corta abaixo de
+  `SCHEDULER_MIN_PASS_ELEVATION_DEG` (5°) ou 60 s. Um cliente com máscara em 0°
+  vai listar passagens que a estação decidiu não rastrear — é diferença de
+  política, não de cálculo.
+- **Divergência com outro software de tracking é quase sempre o TLE.** Antes de
+  suspeitar da geometria, compare o epoch dos dois lados: um gpredict que nunca
+  rodou "Update TLE data" pode estar meses atrás, e meses de erro along-track
+  põem o satélite a milhares de quilômetros do lugar certo. O ponto subsatélite
+  é o teste decisivo, porque não depende de onde a estação está.
+- **O card do satélite no painel atrasa até ~45 s.** Ele lê
+  `satellite_tracking_status` (escrito a cada 30 s) e a página busca a cada
+  15 s, enquanto o rotor vem ao vivo. Durante uma passagem o satélite varre
+  ~0,3°/s, então os dois números divergem em graus — o do rotor é o atual.
 
 ## Convenções
 
@@ -116,8 +154,11 @@ valida contra o CelesTrak antes de salvar.
 
 Feito: orquestração num compose só; biblioteca de tracking; rastreamento
 autônomo no Station Manager; TC Scheduler com agendamento; página de cadastro
-de satélites com validação no CelesTrak.
+de satélites com validação no CelesTrak; painel do operador no GRS Manager
+(grade de satélites, modal com vetor de estado e agendamentos, botão de
+revalidar TLE).
 
-Em aberto: encoders/moduladores (transmissão real) e o status dos telecomandos
-que depende deles; estreitar a janela de rastreamento para o período de fluxo
-de dados; exibir o plano no dashboard; PR do fix dos GRANTs para o upstream.
+Em aberto: encoders/moduladores (transmissão real) — enquanto não existirem, o
+`sent` do fim da janela é inferência, não confirmação; estreitar a janela de
+rastreamento para o período de fluxo de dados; mapa de trajetória no painel;
+PR para o upstream do fix dos GRANTs e do `.panel` da página de satélites.
