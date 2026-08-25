@@ -191,8 +191,8 @@ def _load_cache(norad_id: int) -> Optional[OrbitalData]:
         return None
 
 
-def _cache_age_hours(orbital_data: OrbitalData) -> float:
-    return (time.time() - orbital_data.fetched_at) / 3600.0
+def _cache_age_minutes(orbital_data: OrbitalData) -> float:
+    return (time.time() - orbital_data.fetched_at) / 60.0
 
 
 def get_orbital_data(norad_id: int, force_update: bool = False) -> OrbitalData:
@@ -201,14 +201,14 @@ def get_orbital_data(norad_id: int, force_update: bool = False) -> OrbitalData:
 
     Retorna os dados orbitais mais recentes disponíveis para o satélite:
       - usa o cache local se ele ainda estiver "fresco" (dentro de
-        CACHE_MAX_AGE_HOURS) e `force_update` for False;
+        CACHE_MAX_AGE_MINUTES) e `force_update` for False;
       - caso contrário, tenta buscar na rede (OMM, depois TLE);
       - se a rede falhar nos dois formatos, cai para o último cache válido,
         mesmo que "velho" (melhor um TLE desatualizado do que nenhum dado).
     """
     cached = _load_cache(norad_id)
 
-    if not force_update and cached is not None and _cache_age_hours(cached) < config.CACHE_MAX_AGE_HOURS:
+    if not force_update and cached is not None and _cache_age_minutes(cached) < config.CACHE_MAX_AGE_MINUTES:
         return cached
 
     for fetch_fn, label in ((_fetch_omm_json, "OMM/JSON"), (_fetch_tle, "TLE")):
@@ -222,7 +222,7 @@ def get_orbital_data(norad_id: int, force_update: bool = False) -> OrbitalData:
     if cached is not None:
         print(
             f"[celestrak] NORAD {norad_id}: rede indisponível. Usando cache "
-            f"local com {_cache_age_hours(cached):.1f}h de idade."
+            f"local com {_cache_age_minutes(cached):.0f} min de idade."
         )
         return cached
 

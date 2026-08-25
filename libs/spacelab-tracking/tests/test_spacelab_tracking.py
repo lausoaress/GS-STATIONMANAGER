@@ -99,7 +99,7 @@ def test_fresh_cache_is_used_without_touching_network(cache_dir, monkeypatch):
 
 def test_stale_cache_is_used_when_network_fails(cache_dir, monkeypatch):
     """Degradação graciosa: um TLE velho é melhor do que nenhum dado."""
-    stale = time.time() - (config.CACHE_MAX_AGE_HOURS + 10) * 3600
+    stale = time.time() - (config.CACHE_MAX_AGE_MINUTES + 60) * 60
     celestrak._save_cache(25544, _sample(25544, stale))
 
     def offline(*args, **kwargs):
@@ -352,3 +352,35 @@ def test_min_elevation_mask_filters_low_passes():
 
     assert len(high_passes) <= len(all_passes)
     assert all(p.max_elevation_deg > 20.0 for p in high_passes)
+
+
+# --- Configuração da idade do cache ----------------------------------------
+
+
+def test_cache_age_is_configured_in_minutes(monkeypatch):
+    monkeypatch.setenv("TRACKING_CACHE_MAX_AGE_MINUTES", "5")
+    monkeypatch.delenv("TRACKING_CACHE_MAX_AGE_HOURS", raising=False)
+
+    assert config._cache_max_age_minutes() == 5.0
+
+
+def test_cache_age_still_accepts_the_old_hours_variable(monkeypatch):
+    """Quem já configurou em horas não é quebrado pela mudança de unidade."""
+    monkeypatch.delenv("TRACKING_CACHE_MAX_AGE_MINUTES", raising=False)
+    monkeypatch.setenv("TRACKING_CACHE_MAX_AGE_HOURS", "2")
+
+    assert config._cache_max_age_minutes() == 120.0
+
+
+def test_minutes_wins_over_hours_when_both_are_set(monkeypatch):
+    monkeypatch.setenv("TRACKING_CACHE_MAX_AGE_MINUTES", "10")
+    monkeypatch.setenv("TRACKING_CACHE_MAX_AGE_HOURS", "6")
+
+    assert config._cache_max_age_minutes() == 10.0
+
+
+def test_cache_age_falls_back_to_the_default(monkeypatch):
+    monkeypatch.delenv("TRACKING_CACHE_MAX_AGE_MINUTES", raising=False)
+    monkeypatch.delenv("TRACKING_CACHE_MAX_AGE_HOURS", raising=False)
+
+    assert config._cache_max_age_minutes() == config.DEFAULT_CACHE_MAX_AGE_MINUTES

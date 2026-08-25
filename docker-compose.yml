@@ -99,6 +99,9 @@ services:
       GS_LONGITUDE_DEG: ${GS_LONGITUDE_DEG:--46.6333}
       GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
       TRACKING_DATA_DIR: /app/data
+      # Idade máxima do TLE em cache, em minutos, antes de revalidar no
+      # CelesTrak. Os dois serviços leem o mesmo volume e precisam concordar.
+      TRACKING_CACHE_MAX_AGE_MINUTES: ${TRACKING_CACHE_MAX_AGE_MINUTES:-15}
     depends_on:
       - station-manager
     volumes:
@@ -131,6 +134,9 @@ services:
       GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
       GS_MIN_ELEVATION_DEG: ${GS_MIN_ELEVATION_DEG:-0}
       TRACKING_DATA_DIR: /app/data
+      # Idade máxima do TLE em cache, em minutos, antes de revalidar no
+      # CelesTrak. Os dois serviços leem o mesmo volume e precisam concordar.
+      TRACKING_CACHE_MAX_AGE_MINUTES: ${TRACKING_CACHE_MAX_AGE_MINUTES:-15}
     depends_on:
       postgres:
         condition: service_healthy

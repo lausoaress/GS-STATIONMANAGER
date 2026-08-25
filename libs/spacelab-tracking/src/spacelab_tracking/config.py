@@ -54,8 +54,39 @@ def orbital_data_cache_file(norad_id: int) -> Path:
 
 # Satélites em órbita baixa sofrem decaimento perceptível (arrasto atmosférico)
 # e manobras. Para uso "sério" de apontamento, não se recomenda um TLE com mais
-# de ~24h. 6h é um valor conservador e seguro.
-CACHE_MAX_AGE_HOURS = float(os.getenv("TRACKING_CACHE_MAX_AGE_HOURS", "6"))
+# de ~24h.
+#
+# A configuração é em MINUTOS: horas era grosso demais para uma estação que
+# quer os elementos frescos pouco antes de uma passagem, e não havia como pedir
+# "revalide a cada 15 minutos" sem escrever 0.25.
+#
+# O CelesTrak publica elementos novos a cada poucas horas, então valores muito
+# baixos repetem download sem ganhar precisão — o ganho real de um intervalo
+# curto é reduzir a janela entre a publicação e a estação enxergá-la.
+DEFAULT_CACHE_MAX_AGE_MINUTES = 15.0
+
+
+def _cache_max_age_minutes() -> float:
+    """Idade máxima do cache, aceitando a variável antiga em horas.
+
+    TRACKING_CACHE_MAX_AGE_HOURS era a única forma de configurar isto, e
+    continua valendo para quem já a definiu — mas MINUTES tem precedência.
+    """
+    minutes = os.getenv("TRACKING_CACHE_MAX_AGE_MINUTES")
+    if minutes is not None:
+        return float(minutes)
+
+    hours = os.getenv("TRACKING_CACHE_MAX_AGE_HOURS")
+    if hours is not None:
+        return float(hours) * 60.0
+
+    return DEFAULT_CACHE_MAX_AGE_MINUTES
+
+
+CACHE_MAX_AGE_MINUTES = _cache_max_age_minutes()
+
+# Mantida para não quebrar quem já importa esta constante da biblioteca.
+CACHE_MAX_AGE_HOURS = CACHE_MAX_AGE_MINUTES / 60.0
 
 # ---------------------------------------------------------------------------
 # Estação terrestre (observador)

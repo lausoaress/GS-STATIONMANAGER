@@ -35,7 +35,7 @@ Tudo por variável de ambiente, sem editar código:
 | `GS_ALTITUDE_M` | `760.0` | Altitude em metros |
 | `GS_MIN_ELEVATION_DEG` | `0.0` | Máscara de elevação (abaixo disso, sem visada útil) |
 | `TRACKING_DATA_DIR` | `./data` | Onde fica o cache de dados orbitais |
-| `TRACKING_CACHE_MAX_AGE_HOURS` | `6` | Idade máxima do cache antes de rebuscar |
+| `TRACKING_CACHE_MAX_AGE_MINUTES` | `15` | Idade máxima do cache antes de rebuscar. `TRACKING_CACHE_MAX_AGE_HOURS` ainda é aceita e convertida. |
 | `TRACKING_HTTP_TIMEOUT_SECONDS` | `10` | Timeout das chamadas ao CelesTrak |
 
 Os defaults de latitude/longitude são um **exemplo** (São Paulo) e precisam ser
