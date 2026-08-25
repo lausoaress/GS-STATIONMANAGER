@@ -85,3 +85,25 @@ def test_station_to_dict_exposes_configured_coordinates():
         "longitude_degrees": -48.5,
         "altitude_m": 10.0,
     }
+
+
+def test_refresh_result_carries_the_source_on_success():
+    satellite = {"name": "FloripaSat-1", "code": "SAT-001", "norad_id": 44885}
+
+    result = station_data._refresh_result(satellite, "updated", None, source="omm")
+
+    assert result["status"] == "updated"
+    assert result["source"] == "omm"
+    assert result["message"] is None
+
+
+def test_refresh_result_carries_the_reason_on_failure():
+    """A falha de um satélite precisa chegar à tela: revalidar é ir à rede, e
+    a rede falha de formas que o operador tem de conseguir ler."""
+    satellite = {"name": "ISS", "code": "SAT-ISS", "norad_id": 25544}
+
+    result = station_data._refresh_result(satellite, "failed", "CelesTrak indisponível")
+
+    assert result["status"] == "failed"
+    assert result["message"] == "CelesTrak indisponível"
+    assert result["source"] is None
