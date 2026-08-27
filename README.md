@@ -8,15 +8,16 @@ O projeto usa Python 3.11+ e Flask, mantendo a arquitetura hexagonal documentada
 
 ```
 src/mgm8/            # Station Manager (Control Server)
-├── api/             # Adaptador HTTP Flask (agendamento de passagens)
-├── application/     # Casos de uso
+├── application/     # Casos de uso: controle de rotor e rastreamento de passagem
 ├── domain/          # Entidades, value objects, portas e regras de negócio
-├── infrastructure/  # Adaptadores de saída (persistência em memória, rotor mock/ZMQ)
-└── rotor_zmq/        # Adaptador de entrada ZMQ: controle de rotor pro GRS Manager
+├── infrastructure/  # Adaptadores de saída (rotor mock/ZMQ, apontamento SGP4)
+└── rotor_zmq/       # Adaptador de entrada ZMQ: única porta de rede do serviço
 
 src/tc_scheduler/    # TC Scheduler (Control Server) — decide o que rastrear
 ├── planner.py       # Escolha de passagens: onde mora a autonomia
 ├── db.py            # Leitura/escrita no banco do TC Generator (SQL puro)
+├── station_data.py  # Leitura do plano, para servir a quem pergunta
+├── api.py           # API HTTP de leitura (:5591) — é daqui que o painel se serve
 └── station_manager.py  # Cliente ZMQ pro Station Manager
 
 libs/spacelab-tracking/  # Satellite Tracker — SGP4, CelesTrak, previsão de passagens
@@ -25,7 +26,8 @@ src/grs_manager/      # GRS Manager (Control Desktop) — processo separado
 ├── domain/          # Portas e value objects próprios (não compartilha código com o mgm8)
 ├── rotctld/         # Adaptador de entrada: bridge TCP compatível com rotctld (gpredict)
 ├── adapters/        # Adaptador de saída: cliente ZMQ pro Station Manager
-└── status/          # Painel HTTP (Flask): gpredict conectado? rotor respondendo?
+├── status/          # Painel HTTP (Flask): rotor respondendo? plano da estação?
+└── status/scheduler_client.py  # Cliente da API do TC Scheduler (não abre banco)
 
 services/            # Submódulos git — outros blocos da estação, orquestrados pelo compose
 └── grs-tc-generator/    # Satellite TC Generator (Control Desktop)
@@ -158,11 +160,13 @@ $env:STATION_POINTING_MIN_ELEVATION="-90"; docker compose up -d station-manager
 git submodule update --init --recursive
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-flask --app mgm8.api.app run --debug
+python -m pip install -e "./libs/spacelab-tracking"
+python -m pip install -e ".[dev,zmq,scheduler]"
+python -m pytest
 ```
 
-A API expõe `GET /health` e `POST /api/passes`. Veja o exemplo de payload em `tests/test_api.py`.
+Nenhum dos serviços sobe com `flask run`: cada um tem o seu próprio `main`.
+Veja as duas seções seguintes.
 
 ### Controle de rotor (gpredict -> GRS Manager -> Station Manager -> Rotor Manager)
 

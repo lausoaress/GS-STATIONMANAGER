@@ -1,5 +1,14 @@
 -- ============================================================================
--- Ground Station Manager (MGM8) — Database Schema
+-- NÃO É O SCHEMA EM USO. Documento de design do MGM8 original, mantido como
+-- registro de intenção — nada monta este arquivo e nenhuma linha de Python
+-- consulta estas tabelas.
+--
+-- O schema que a estação realmente usa é o do TC Generator, em
+-- services/grs-tc-generator/resources/database/schema.sql, montado pelo
+-- docker-compose em /docker-entrypoint-initdb.d/. É lá que estão satellites,
+-- telecommands, scheduled_passes, satellite_tracking_status e execution_logs.
+--
+-- Ground Station Manager (MGM8) — Database Schema (design original)
 -- Schema: station_manager
 -- Database: PostgreSQL 16+ (compatible with TimescaleDB ecosystem)
 -- ============================================================================

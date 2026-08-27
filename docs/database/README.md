@@ -226,12 +226,18 @@ erDiagram
 
 ## Script SQL
 
-O script completo de criação está em [`schema.sql`](schema.sql).
+> **Este documento descreve um design, não o banco em uso.** O script está em
+> [`design-original-mgm8.sql`](design-original-mgm8.sql) e nada o executa: o
+> schema que a estação realmente usa é o do TC Generator
+> (`services/grs-tc-generator/resources/database/schema.sql`), montado pelo
+> compose em `/docker-entrypoint-initdb.d/`. As tabelas que o TC Scheduler
+> escreve e serve — `satellites`, `telecommands`, `scheduled_passes`,
+> `satellite_tracking_status`, `execution_logs` — estão lá, e não aqui.
 
-Para aplicar:
+Se ainda assim quiser aplicar o design original num banco separado:
 
 ```bash
-psql -U grs -d grs -f docs/database/schema.sql
+psql -U grs -d grs -f docs/database/design-original-mgm8.sql
 ```
 
 ## Valores enumerados
