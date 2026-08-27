@@ -8,7 +8,12 @@ version = "0.1.0"
 description = "Ground Station Manager"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["Flask>=3.0,<4.0"]
+dependencies = [
+    "Flask>=3.0,<4.0",
+    # O painel do GRS Manager consulta a API de leitura do TC Scheduler; é a
+    # única coisa que ele usa no lugar da conexão com o Postgres que tinha.
+    "requests>=2.31",
+]
 
 # spacelab-tracking e o driver do Postgres não entram em `dependencies`: a
 # primeira não está num índice de pacotes (é instalada de libs/ por caminho

@@ -85,31 +85,24 @@ services:
       - "4533:4533"   # rotctld (hamlib) — é aqui que o gpredict conecta
       - "5590:5590"   # painel de status (SSE)
     environment:
-      # Somente leitura: o painel mostra o plano e a posição dos satélites que
-      # o TC Scheduler escreve. Quem grava continua sendo só o Scheduler.
-      # Sem esta variável o painel funciona igual, só sem a parte de satélites.
-      PG_DATABASE_URL: postgresql+psycopg2://${DB_USER:-admin}:${DB_PASSWORD:-admin}@postgres:5432/${DB_NAME:-tc_generator}
+      # O painel pergunta ao TC Scheduler o que ele planejou, em vez de abrir
+      # o banco. Este é o único serviço da estação que não conhece o Postgres
+      # — nem para ler. Sem esta variável o painel funciona igual, só sem a
+      # parte de satélites.
+      TC_SCHEDULER_API_URL: http://tc-scheduler:5591
       # Resolvido pelo navegador do operador (os links de telecomando abrem o
       # TC Generator), e não pelo container — por isso localhost.
       TC_GENERATOR_URL: ${TC_GENERATOR_URL:-http://localhost:5000}
-      # Mesmas coordenadas do resto da estação: o modal mostra a posição da
-      # estação e o apontamento calculado a partir dela.
-      GS_NAME: ${GS_NAME:-Estação de Teste}
-      GS_LATITUDE_DEG: ${GS_LATITUDE_DEG:--23.5505}
-      GS_LONGITUDE_DEG: ${GS_LONGITUDE_DEG:--46.6333}
-      GS_ALTITUDE_M: ${GS_ALTITUDE_M:-760}
-      TRACKING_DATA_DIR: /app/data
-      # Idade máxima do TLE em cache, em minutos, antes de revalidar no
-      # CelesTrak. Os dois serviços leem o mesmo volume e precisam concordar.
-      TRACKING_CACHE_MAX_AGE_MINUTES: ${TRACKING_CACHE_MAX_AGE_MINUTES:-15}
+    # As coordenadas GS_* saíram junto com o acesso ao banco: quem propaga a
+    # órbita agora é o Scheduler, e o painel só desenha o que recebe pronto.
     depends_on:
       - station-manager
+      # Só ordem de subida, não requisito: com o Scheduler fora, o painel
+      # continua sendo o controle de rotor, que é o que ele precisa fazer.
+      - tc-scheduler
     volumes:
       - ./src:/app/src
       - ./libs:/app/libs
-      # Mesmo cache de TLE do Scheduler: sem ele, cada abertura de modal de um
-      # satélite ainda não visto iria ao CelesTrak de novo.
-      - tracking_data:/app/data
     networks:
       - spacelab-network
 
@@ -135,8 +128,10 @@ services:
       GS_MIN_ELEVATION_DEG: ${GS_MIN_ELEVATION_DEG:-0}
       TRACKING_DATA_DIR: /app/data
       # Idade máxima do TLE em cache, em minutos, antes de revalidar no
-      # CelesTrak. Os dois serviços leem o mesmo volume e precisam concordar.
+      # CelesTrak. Este serviço é o único que escreve e lê esse cache.
       TRACKING_CACHE_MAX_AGE_MINUTES: ${TRACKING_CACHE_MAX_AGE_MINUTES:-15}
+    ports:
+      - "5591:5591"   # API de leitura do plano — é daqui que o painel se serve
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,6 +142,9 @@ services:
       - ./libs:/app/libs
       - ./tools:/app/tools
       # Cache de TLE: preserva o fallback offline do celestrak entre restarts.
+      # Antes o GRS Manager montava este mesmo volume para poder revalidar os
+      # TLEs pelo painel; agora ele pede a revalidação por HTTP, e o cache tem
+      # um único processo mexendo nele.
       - tracking_data:/app/data
     networks:
       - spacelab-network

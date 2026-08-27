@@ -1,19 +1,17 @@
-"""Leitura do plano da estação, para o painel do GRS Manager.
+"""Leitura do plano da estação: satélites, passagens e telecomandos.
 
-O painel sempre soube responder "a antena está apontada para onde?". O que
-faltava era a outra metade da pergunta do operador: "e ela deveria estar
-apontada para onde?". Isso não está no GRS Manager nem no Station Manager —
-está no banco, escrito pelo TC Scheduler (posição corrente de cada satélite e
-o plano de passagens).
+Responde a segunda metade da pergunta do operador — "para onde a antena
+deveria estar apontada?". A primeira metade ("para onde ela está?") é do
+Station Manager e nunca passou por aqui.
 
-Somente leitura, e deliberadamente opcional. O GRS Manager é a ponte do rotor:
-ele precisa continuar de pé mesmo com o Postgres fora do ar, porque uma
-passagem em andamento não pode parar por causa do banco. Sem PG_DATABASE_URL,
-ou com o banco inacessível, o painel volta a ser exatamente o que era antes —
-rotor e gpredict — em vez de falhar por inteiro.
+Mora no TC Scheduler porque é ele quem escreve estes dados. Manter a leitura
+junto da escrita deixa o banco com um dono só: o painel do GRS Manager consome
+isto pela API HTTP (`tc_scheduler.api`) e não conhece o Postgres. Antes ele
+abria a própria conexão, o que dava ao Control Desktop uma dependência de banco
+que ele não precisa ter.
 
-Não escreve nada: quem escreve é o TC Scheduler, e essa continua sendo a
-regra. Aqui é só consulta.
+Não escreve no banco. A única escrita é a de `refresh_orbital_data`, e é no
+cache de TLE — outro recurso, e do mesmo processo que já o usa para planejar.
 """
 
 from __future__ import annotations
@@ -367,6 +365,23 @@ class StationData:
         with self._cache_lock:
             self._satrec_cache[code] = (satrec, time.monotonic())
         return satrec
+
+    def is_available(self) -> bool:
+        """O banco responde? Usado só pelo /health da API.
+
+        Um SELECT 1 e não uma das consultas reais: o healthcheck do compose
+        roda a cada poucos segundos e não deve competir com o laço de
+        replanejamento pelo pool de duas conexões.
+        """
+        from sqlalchemy import text
+
+        try:
+            with self._engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True
+        except Exception as error:
+            logger.warning("Banco indisponível: %s", error)
+            return False
 
     def close(self) -> None:
         self._engine.dispose()

@@ -9,7 +9,7 @@ provaria que o SQLAlchemy sabe montar strings.
 
 from datetime import datetime, timezone
 
-from grs_manager.status import station_data
+from tc_scheduler import station_data
 
 
 def _pass_row(pass_id=1):

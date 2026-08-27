@@ -43,6 +43,18 @@ TRACKING_POLL_INTERVAL_SECONDS = float(os.getenv("TRACKING_POLL_INTERVAL_SECONDS
 MIN_PASS_DURATION_SECONDS = float(os.getenv("SCHEDULER_MIN_PASS_DURATION_SECONDS", "60"))
 MIN_PASS_MAX_ELEVATION_DEG = float(os.getenv("SCHEDULER_MIN_PASS_ELEVATION_DEG", "5"))
 
+# --- API de leitura ---------------------------------------------------------
+# O painel do GRS Manager consome isto no lugar de abrir o Postgres. Porta
+# vizinha à 5590 do painel, para as duas ficarem juntas na tabela de acessos.
+#
+# O default de host é 0.0.0.0, e não 127.0.0.1: este serviço é feito para rodar
+# em container e ser consultado por outro (o default de DATABASE_URL já aponta
+# para o hostname `postgres`). Um bind em localhost aqui não aceitaria conexão
+# de fora do container e o painel ficaria sem satélites sem dizer por quê.
+API_HOST = os.getenv("SCHEDULER_API_HOST", "0.0.0.0")
+API_PORT = int(os.getenv("SCHEDULER_API_PORT", "5591"))
+API_ENABLED = os.getenv("SCHEDULER_API_ENABLED", "1").lower() not in ("0", "false", "no")
+
 # --- Estação terrestre ------------------------------------------------------
 GROUND_STATION = tracking_config.GROUND_STATION
 MIN_ELEVATION_DEG = tracking_config.MIN_ELEVATION_DEG

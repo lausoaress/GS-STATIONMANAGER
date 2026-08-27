@@ -10,15 +10,19 @@ Station Manager, que recebe uma ordem por passagem e a conduz até o LOS — ass
 um replanejamento pesado (propagar 24h de N satélites) nunca atrasa o
 apontamento, e o rotor sobrevive a um restart deste processo.
 
-Cada tarefa do ciclo tem o seu próprio intervalo, num laço só, sem threads:
-nada aqui compete por tempo, então concorrência só traria dificuldade de
-depuração.
+Cada tarefa do ciclo tem o seu próprio intervalo, num laço só: nada aqui
+compete por tempo, então concorrência entre as tarefas do plano só traria
+dificuldade de depuração. A única thread do processo é a da API de leitura
+(`tc_scheduler.api`), que não compartilha estado com o laço — ela abre o
+próprio engine e só lê.
 """
 
 from __future__ import annotations
 
+import argparse
 import logging
 import signal
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Optional
@@ -326,6 +330,11 @@ class Scheduler:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="TC Scheduler: decide o que a estação rastreia, e quando")
+    parser.add_argument("--no-api", action="store_true",
+                        help="Não sobe a API de leitura (o painel fica sem a visão de satélites)")
+    args = parser.parse_args()
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
@@ -337,6 +346,10 @@ def main() -> None:
     )
     scheduler = Scheduler(engine, station)
 
+    api_data = None
+    if config.API_ENABLED and not args.no_api:
+        api_data = _start_api()
+
     # SIGTERM é como o Docker pede para o container parar.
     signal.signal(signal.SIGTERM, scheduler.stop)
     signal.signal(signal.SIGINT, scheduler.stop)
@@ -346,6 +359,41 @@ def main() -> None:
     finally:
         station.close()
         engine.dispose()
+        if api_data is not None:
+            api_data.close()
+
+
+def _start_api():
+    """Sobe a API de leitura numa thread daemon, e devolve o `station_data` dela.
+
+    Engine próprio, separado do que o laço usa: são dois pools independentes,
+    e SQLAlchemy é thread-safe. Nenhum objeto mutável cruza as duas threads.
+
+    Daemon porque o dono do processo é o laço de planejamento — se ele parar,
+    a API não tem por que segurar o container de pé. Uma falha aqui é logada e
+    não impede o Scheduler de planejar: consultar é o serviço acessório, e
+    rastrear é o principal.
+    """
+    from tc_scheduler import api, station_data as station_data_module
+
+    try:
+        data = station_data_module.from_environment()
+        if data is None:
+            return None
+        thread = threading.Thread(
+            target=api.create_app(data).run,
+            # threaded=True: sem isso, uma consulta lenta ao banco travaria
+            # qualquer outra requisição, inclusive o healthcheck do compose.
+            kwargs={"host": config.API_HOST, "port": config.API_PORT,
+                    "debug": False, "use_reloader": False, "threaded": True},
+            daemon=True,
+        )
+        thread.start()
+        logger.info("API de leitura em http://%s:%d", config.API_HOST, config.API_PORT)
+        return data
+    except Exception:
+        logger.exception("Falha ao subir a API de leitura; o Scheduler segue planejando.")
+        return None
 
 
 if __name__ == "__main__":
