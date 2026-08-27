@@ -11,8 +11,8 @@ O pipeline segue a simetria do diagrama oficial da arquitetura GRS: cada
 
 ```
 Satellite Tracker  --rotctld (TCP)-->  GRS Manager  --ZMQ REQ/REP-->  Station Manager  --ZMQ PUSH/PULL+PUB/SUB-->  Rotor Manager  --Rot2Prog (serial)-->  Rotor Controller
-   (gpredict)          protocolo           src/                        src/mgm8/           protocolo do              vendor/                (binário)         (hardware ou
-                        hamlib          grs_manager/                                        grs-rotor-manager      grs-rotor-manager                        rotor_simulator.py)
+   (gpredict)          protocolo           src/                        src/mgm8/           protocolo do          src/mgm8/vendor/           (binário)         (hardware ou
+                        hamlib          grs_manager/                                        grs-rotor-manager      rotor_manager.py                          rotor_simulator.py)
 ```
 
 | Componente | Papel | Código |
@@ -20,7 +20,7 @@ Satellite Tracker  --rotctld (TCP)-->  GRS Manager  --ZMQ REQ/REP-->  Station Ma
 | **Satellite Tracker** | Cliente rotctld, não é nosso | gpredict |
 | **GRS Manager** | Adapter: fala rotctld pro gpredict, fala ZMQ pro Station Manager | [`src/grs_manager/`](../src/grs_manager/) |
 | **Station Manager** | Núcleo de negócio (clamp de curso) + adapter de saída pro Rotor Manager | [`src/mgm8/`](../src/mgm8/) |
-| **Rotor Manager** | Adapter: fala ZMQ pro Station Manager, fala Rot2Prog binário pro rotor | [`vendor/grs-rotor-manager/`](../vendor/grs-rotor-manager/) (submódulo git) |
+| **Rotor Manager** | Adapter: fala ZMQ pro Station Manager, fala Rot2Prog binário pro rotor | [`src/mgm8/vendor/`](../src/mgm8/vendor/) (cópia, ver `UPSTREAM.md`) |
 | **Rotor Controller** | Hardware físico (AlfaSpid) | — no teste, `rotor_simulator.py` faz esse papel |
 
 Cada seta do diagrama é um **protocolo diferente**, e cada "Manager" só
@@ -114,7 +114,7 @@ Manager (antes disso, tudo vivia junto em `mgm8.rotctld`).
 ## Pré-requisitos
 
 ```powershell
-git submodule update --init --recursive   # baixa vendor/grs-rotor-manager
+# o Rotor Manager já vem no pacote (src/mgm8/vendor), sem submódulo
 py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -e ".[dev,zmq]"

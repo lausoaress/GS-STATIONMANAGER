@@ -13,7 +13,7 @@ como submódulos em `services/`.
 | **Station Manager** | `src/mgm8/` | Controla o rotor; rastreia um satélite sozinho durante a passagem |
 | **GRS Manager** | `src/grs_manager/` | Painel do operador (rotor + satélites) e ponte rotctld para controle manual |
 | **Satellite Tracker** | `libs/spacelab-tracking/` | Biblioteca: SGP4, CelesTrak, previsão de passagens |
-| **Rotor Manager** | `vendor/grs-rotor-manager/` (submódulo) | Protocolo Rot2Prog, hardware |
+| **Rotor Manager** | `src/mgm8/vendor/` (cópia, ver `UPSTREAM.md`) | Protocolo Rot2Prog, hardware |
 
 ## Permissões dos repositórios
 

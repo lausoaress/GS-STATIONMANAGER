@@ -1,6 +1,3 @@
-[submodule "vendor/grs-rotor-manager"]
-	path = vendor/grs-rotor-manager
-	url = https://github.com/spacelab-ufsc/grs-rotor-manager
 [submodule "services/grs-tc-generator"]
 	path = services/grs-tc-generator
 	url = https://github.com/edsoncepedi/grs-tc-generator.git

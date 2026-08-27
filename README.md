@@ -32,7 +32,7 @@ src/grs_manager/      # GRS Manager (Control Desktop) — processo separado
 services/            # Submódulos git — outros blocos da estação, orquestrados pelo compose
 └── grs-tc-generator/    # Satellite TC Generator (Control Desktop)
 
-vendor/grs-rotor-manager/  # Submódulo git — Rotor Manager (Station Server), protocolo Rot2Prog
+src/mgm8/vendor/     # Rotor Manager copiado do grs-rotor-manager (ver UPSTREAM.md)
 docker/              # Dockerfile da imagem que serve mgm8 e grs_manager
 tests/               # Testes pytest
 tools/               # Scripts de diagnóstico (ex.: rotctld_spy.py)
@@ -182,8 +182,8 @@ python -m grs_manager.main
 
 O gpredict conecta no **GRS Manager** (`127.0.0.1:4533`), nunca direto no
 Station Manager. Para usar o rotor físico/simulado via ZMQ (protocolo
-Rot2Prog do [`vendor/grs-rotor-manager`](vendor/grs-rotor-manager), submódulo
-git) em vez do mock: `python -m mgm8.rotor_zmq.main --rotor zmq
+Rot2Prog de [`src/mgm8/vendor`](src/mgm8/vendor), copiado do
+grs-rotor-manager) em vez do mock: `python -m mgm8.rotor_zmq.main --rotor zmq
 --rotor-address tcp://127.0.0.1:5559` (requer `pip install -e ".[dev,zmq]"`).
 
 O GRS Manager sobe junto um **painel de status** em

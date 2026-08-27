@@ -155,7 +155,7 @@ services:
       dockerfile: docker/Dockerfile
     container_name: spacelab-station-manager
     # --rotor mock, e não zmq: o RotorManager vendorizado tem o socket SUB fixo
-    # em tcp://localhost:5560 (vendor/grs-rotor-manager/rotor_manager.py), o que
+    # em tcp://localhost:5560 (src/mgm8/vendor/rotor_manager.py), o que
     # só funciona com o simulador no mesmo host de rede — nunca entre containers.
     # Rodar contra o rotor físico/simulado continua sendo fora do Docker.
     command:

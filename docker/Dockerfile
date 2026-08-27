@@ -21,7 +21,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml README.md ./
 COPY libs/ ./libs/
 COPY src/ ./src/
-COPY vendor/ ./vendor/
 
 # spacelab-tracking é instalada à parte, e não como dependência declarada no
 # pyproject: ela não está num índice de pacotes, e caminhos relativos em
