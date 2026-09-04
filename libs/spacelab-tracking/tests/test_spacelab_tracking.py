@@ -278,6 +278,54 @@ def test_substellite_point_is_directly_overhead_itself():
     )
 
 
+# --- Range rate e Doppler -------------------------------------------------
+
+def test_range_rate_matches_finite_difference_of_range():
+    """A taxa de variação analítica (via velocidade em ECEF) tem que bater com
+    a diferença numérica da distância — cruza teme_to_ecef_velocity e
+    range_rate_km_s com uma referência independente."""
+    satrec = build_satellite(from_tle_lines(ISS_LINE1, ISS_LINE2, ISS_NAME))
+    dt = timedelta(seconds=1)
+    for minutes in (5, 20, 45, 70):
+        t = ISS_EPOCH + timedelta(minutes=minutes)
+        before = get_tracking_info(satrec, ISS_NAME, when=t - dt, station=STATION).topocentric.range_km
+        after = get_tracking_info(satrec, ISS_NAME, when=t + dt, station=STATION).topocentric.range_km
+        numeric = (after - before) / 2.0
+        analytic = get_tracking_info(satrec, ISS_NAME, when=t, station=STATION).range_rate_km_s
+        assert analytic == pytest.approx(numeric, abs=0.02)  # < 20 m/s
+
+
+def test_doppler_sign_and_magnitude_over_one_orbit():
+    satrec = build_satellite(from_tle_lines(ISS_LINE1, ISS_LINE2, ISS_NAME))
+    downlink_hz = 437_000_000
+    max_shift = 0.0
+    for minutes in range(0, 95, 2):
+        info = get_tracking_info(
+            satrec, ISS_NAME, when=ISS_EPOCH + timedelta(minutes=minutes), station=STATION
+        )
+        shift = info.doppler_shift_hz(downlink_hz)
+        # Aproximando (range rate < 0) => portadora sobe (shift > 0).
+        assert (shift > 0) == (info.range_rate_km_s < 0)
+        assert info.observed_frequency_hz(downlink_hz) == pytest.approx(downlink_hz + shift)
+        max_shift = max(max_shift, abs(shift))
+    # ISS a ~7.66 km/s: o Doppler em 70 cm fica abaixo de ~11.2 kHz.
+    assert 1_000 < max_shift < 12_000
+
+
+def test_doppler_shift_is_near_zero_at_culmination():
+    """No instante de elevação máxima a distância está no mínimo, então a taxa
+    de variação — e o Doppler — passam por zero."""
+    satrec = build_satellite(from_tle_lines(ISS_LINE1, ISS_LINE2, ISS_NAME))
+    passes = predict_passes(
+        satrec, ISS_NAME, station=STATION, start=ISS_EPOCH, search_window_hours=24.0
+    )
+    assert passes, "esperava ao menos uma passagem visível em 24 h"
+    at_peak = get_tracking_info(
+        satrec, ISS_NAME, when=passes[0].culmination_time, station=STATION
+    )
+    assert abs(at_peak.doppler_shift_hz(437_000_000)) < 500.0
+
+
 # --- Sanidade física --------------------------------------------------------
 
 def test_iss_altitude_is_in_low_earth_orbit():

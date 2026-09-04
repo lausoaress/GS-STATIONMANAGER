@@ -41,6 +41,23 @@ Tudo por variável de ambiente, sem editar código:
 Os defaults de latitude/longitude são um **exemplo** (São Paulo) e precisam ser
 trocados pelos da estação real.
 
+## Doppler
+
+`get_tracking_info()` também devolve `range_rate_km_s` — a taxa de variação da
+distância estação→satélite (negativa enquanto se aproxima), calculada a partir
+da velocidade convertida para o referencial girante ECEF (rotação GMST mais o
+termo `-ω × r`). A partir dela, para uma portadora emitida pelo satélite:
+
+```python
+info = get_tracking_info(satrec, name, station=station)
+info.doppler_shift_hz(437_000_000)        # desvio visto na estação (Hz)
+info.observed_frequency_hz(437_000_000)   # frequência já corrigida p/ sintonizar
+```
+
+O sinal segue a convenção física: satélite se aproximando → `range_rate` < 0 →
+desvio positivo. Para a ISS em 70 cm, o desvio fica abaixo de ~11 kHz e passa
+por zero na culminação.
+
 ## Validação
 
 A melhor checagem do cálculo é comparar com uma ferramenta independente usando

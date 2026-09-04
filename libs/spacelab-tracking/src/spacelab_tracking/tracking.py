@@ -38,6 +38,11 @@ class TrackingInfo:
     geodetic: coordinates.GeodeticPosition
     topocentric: coordinates.TopocentricPosition
 
+    # Taxa de variacao da distancia estacao->satelite (km/s): negativa
+    # enquanto se aproxima. Base do desvio Doppler. Default 0.0 apenas para
+    # nao quebrar quem constroi TrackingInfo posicionalmente.
+    range_rate_km_s: float = 0.0
+
     @property
     def is_visible(self) -> bool:
         return self.topocentric.elevation_deg > config.MIN_ELEVATION_DEG
@@ -45,6 +50,17 @@ class TrackingInfo:
     @property
     def status_label(self) -> str:
         return "VISIBLE" if self.is_visible else "BELOW HORIZON"
+
+    def doppler_shift_hz(self, emitted_frequency_hz: float) -> float:
+        """Desvio Doppler visto na estacao (Hz), para uma portadora emitida
+        pelo satelite. Positivo quando o satelite se aproxima."""
+        return -emitted_frequency_hz * (
+            self.range_rate_km_s / coordinates.SPEED_OF_LIGHT_KM_S
+        )
+
+    def observed_frequency_hz(self, emitted_frequency_hz: float) -> float:
+        """Frequencia ja corrigida do Doppler, para sintonizar o receptor."""
+        return emitted_frequency_hz + self.doppler_shift_hz(emitted_frequency_hz)
 
 
 def get_tracking_info(
@@ -78,6 +94,11 @@ def get_tracking_info(
         position_ecef, station_ecef, station["latitude_deg"], station["longitude_deg"]
     )
 
+    velocity_ecef = coordinates.teme_to_ecef_velocity(
+        prop_result.velocity_teme_km_s, position_ecef, prop_result.jd, prop_result.fr
+    )
+    range_rate = coordinates.range_rate_km_s(position_ecef, velocity_ecef, station_ecef)
+
     return TrackingInfo(
         satellite_name=satellite_name,
         norad_id=satrec.satnum,
@@ -87,6 +108,7 @@ def get_tracking_info(
         velocity_teme_km_s=prop_result.velocity_teme_km_s,
         geodetic=geodetic,
         topocentric=topocentric,
+        range_rate_km_s=range_rate,
     )
 
 
