@@ -13,6 +13,8 @@ Documentação de arquitetura, modelagem e design do **Gerenciador da Estação 
 | [Modelo de banco de dados](database/README.md) | ERD, schemas, tabelas e scripts SQL |
 | [Integração com subsistemas](architecture/integration.md) | ZMQ, GRS Manager e Station Server |
 | [Controle de rotor (gpredict → GRS Manager → Station Manager → Rotor Manager)](rotor-control.md) | Arquitetura completa do pipeline, setup, configuração do gpredict e troubleshooting |
+| [Painel do operador](architecture/painel-do-operador.md) | Interface única (dashboard do Station Manager) sobre a camada de dados do GRS Manager |
+| [Follow-up: frame e aprovação de TC](architecture/tc-followup-frame-e-aprovacao.md) | Especificação das duas peças que vão para o fork do TC Generator |
 
 ## Referências
 

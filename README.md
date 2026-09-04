@@ -182,11 +182,12 @@ Rot2Prog do [`vendor/grs-rotor-manager`](vendor/grs-rotor-manager), submódulo
 git) em vez do mock: `python -m mgm8.rotor_zmq.main --rotor zmq
 --rotor-address tcp://127.0.0.1:5559` (requer `pip install -e ".[dev,zmq]"`).
 
-O GRS Manager sobe junto um **painel de status** em
-`http://127.0.0.1:5590` (`--status-port` pra mudar, `--no-status` pra
-desligar), mostrando se o gpredict está conectado e se o rotor está
-respondendo — atualiza ao vivo (Server-Sent Events), sem recarregar a
-página. `GET /health` dá o mesmo dado em JSON, sob demanda.
+O GRS Manager sobe junto o **painel do operador** — o dashboard do Station
+Manager — em `http://127.0.0.1:5590` (`--status-port` pra mudar, `--no-status`
+pra desligar): rotor ao vivo (Server-Sent Events), e, com `PG_DATABASE_URL`
+configurado, satélites, próximas passagens e detalhe de cada satélite (vetor de
+estado, ponto subsatélite, telecomandos da passagem). `GET /health` dá o estado
+do rotor em JSON. Ver [`docs/architecture/painel-do-operador.md`](docs/architecture/painel-do-operador.md).
 
 Guia completo (arquitetura, protocolos, teste com o simulador, configuração
 do gpredict, teste entre duas máquinas, troubleshooting) em
