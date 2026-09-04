@@ -131,8 +131,10 @@ CREATE TABLE IF NOT EXISTS station_manager.scheduled_telecommands (
     scheduled_pass_id           UUID REFERENCES station_manager.scheduled_passes(id),
     telecommand_definition_id   UUID NOT NULL,  -- FK → mission_control.telecommands(id)
     execute_at                  TIMESTAMPTZ NOT NULL,
+    parameters                  JSONB NOT NULL DEFAULT '{}'::jsonb,  -- operator-entered values for the definition
+    frame                       BYTEA,          -- optional pre-encoded TC frame; treated as opaque by MGM8
     status                      station_manager.schedule_status NOT NULL DEFAULT 'Scheduled',
-    priority                    SMALLINT NOT NULL DEFAULT 5,
+    priority                    SMALLINT NOT NULL DEFAULT 5 CHECK (priority BETWEEN 1 AND 9),
     requires_approval           BOOLEAN NOT NULL DEFAULT FALSE,
     approved_by                 VARCHAR(128),
     approved_at                 TIMESTAMPTZ,

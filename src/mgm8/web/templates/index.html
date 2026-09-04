@@ -320,6 +320,7 @@
             <div class="tabs">
                 <div class="tab active" onclick="switchTab('dashboard')">Dashboard</div>
                 <div class="tab" onclick="switchTab('passes')">All Passes</div>
+                <div class="tab" onclick="switchTab('telecommands')">Telecommands</div>
                 <div class="tab" onclick="switchTab('events')">Operational Events</div>
             </div>
 
@@ -339,6 +340,11 @@
                         <div class="stat-label">History</div>
                         <div class="stat-value">{{ history_passes|length }}</div>
                         <i class="bi bi-archive stat-icon"></i>
+                    </div>
+                    <div class="stat-card scheduled">
+                        <div class="stat-label">Telecommands</div>
+                        <div class="stat-value">{{ tc_active|length }}</div>
+                        <i class="bi bi-terminal stat-icon"></i>
                     </div>
                 </div>
 
@@ -424,6 +430,71 @@
                         </tr>
                         {% else %}
                         <tr><td colspan="7" class="text-muted">No passes recorded</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="panel" id="telecommandsPanel">
+                <div class="header-actions" style="margin-bottom: 1rem; justify-content: space-between; width: 100%;">
+                    <h3 style="color: #00d9ff; font-size: 1rem;">Scheduled Telecommands</h3>
+                    <button class="btn btn-primary" onclick="openModal('createTcModal')">
+                        <i class="bi bi-plus-lg"></i> Schedule Telecommand
+                    </button>
+                </div>
+                {% if tc_pending_approval %}
+                <div class="alert alert-danger" style="position: static; margin-bottom: 1rem; min-width: 0;">
+                    {{ tc_pending_approval|length }} telecommand(s) awaiting approval before transmission.
+                </div>
+                {% endif %}
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Definition</th>
+                            <th>Execute At</th>
+                            <th>Pass</th>
+                            <th>Prio</th>
+                            <th>Approval</th>
+                            <th>Status</th>
+                            <th>Frame</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tc in telecommands %}
+                        <tr>
+                            <td>{{ tc.id|string|truncate(8, True, '') }}</td>
+                            <td>{{ tc.telecommand_definition_id|string|truncate(8, True, '') }}</td>
+                            <td>{{ tc.execute_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>{{ (tc.scheduled_pass_id|string|truncate(8, True, '')) if tc.scheduled_pass_id else '—' }}</td>
+                            <td>{{ tc.priority }}</td>
+                            <td>
+                                {% if not tc.requires_approval %}<span class="text-muted">n/a</span>
+                                {% elif tc.approved_at %}<span class="badge success">approved</span>
+                                {% else %}<span class="badge warning">pending</span>{% endif %}
+                            </td>
+                            <td><span class="badge">{{ tc.status.value }}</span></td>
+                            <td>{{ (tc.frame_hex|length // 2) if tc.frame_hex else 0 }} B</td>
+                            <td style="white-space: nowrap;">
+                                {% if tc.status.value == 'Scheduled' %}
+                                    {% if tc.requires_approval and not tc.approved_at %}
+                                    <form method="POST" action="/telecommand/approve/{{ tc.id }}" style="display:inline;">
+                                        <input type="hidden" name="approved_by" value="operator">
+                                        <button class="btn btn-secondary" type="submit">Approve</button>
+                                    </form>
+                                    {% endif %}
+                                    <form method="POST" action="/telecommand/cancel/{{ tc.id }}" style="display:inline;"
+                                          onsubmit="return confirm('Cancel this telecommand?')">
+                                        <button class="btn btn-danger" type="submit">Cancel</button>
+                                    </form>
+                                {% else %}
+                                    <span class="text-muted">—</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="9" class="text-muted">No telecommands scheduled</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -558,7 +629,65 @@
         </div>
     </div>
 
+    <div class="modal" id="createTcModal">
+        <div class="modal-content">
+            <form action="{{ url_for('web.create_telecommand') }}" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title">Schedule Telecommand</h5>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createTcModal')">
+                        <i class="bi bi-x-lg"></i>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-grid">
+                        <div class="form-group span-2" style="margin-bottom: 0;">
+                            <label class="form-label">Telecommand Definition ID (UUID)</label>
+                            <input type="text" name="telecommand_definition_id" class="form-control" required
+                                   placeholder="00000000-0000-0000-0000-000000000000">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Execute At (ISO 8601)</label>
+                            <input type="text" name="execute_at" class="form-control" required
+                                   placeholder="2030-01-01T10:04:00+00:00">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Linked Pass ID (optional)</label>
+                            <input type="text" name="scheduled_pass_id" class="form-control"
+                                   placeholder="UUID of the pass">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Priority (1–9)</label>
+                            <input type="number" name="priority" class="form-control" value="5" min="1" max="9">
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label class="form-label">Created By</label>
+                            <input type="text" name="created_by" class="form-control" placeholder="operator">
+                        </div>
+                        <div class="form-group span-2" style="margin-bottom: 0;">
+                            <label class="form-label">Frame (hex — opaque payload, optional)</label>
+                            <textarea name="frame_hex" class="form-control" rows="2"
+                                      placeholder="e.g. 40 7e 12 00 ff"></textarea>
+                        </div>
+                        <div class="form-group span-2" style="margin-bottom: 0;">
+                            <label class="form-label">
+                                <input type="checkbox" name="requires_approval"> Requires approval before transmission
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('createTcModal')">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Schedule Telecommand</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
+        function openModal(modalId) {
+            document.getElementById(modalId).classList.add('active');
+        }
+
         function switchTab(tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));

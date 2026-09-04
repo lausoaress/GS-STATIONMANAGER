@@ -37,7 +37,7 @@ if (-not (Test-Path $venvPython)) {
     & $python.File @($python.Args + "-m" + "venv" + ".venv")
 }
 
-& $venvPython -c "import flask" 2>$null
+& $venvPython -c "import flask, skyfield" 2>$null
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing project dependencies..."
     & $venvPython -m pip install -e ".[dev]"
