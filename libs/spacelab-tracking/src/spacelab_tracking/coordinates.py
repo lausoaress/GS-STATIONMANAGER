@@ -39,6 +39,15 @@ WGS84_A = 6378.137            # semi-eixo maior (km)
 WGS84_F = 1 / 298.257223563   # achatamento
 WGS84_E2 = 2 * WGS84_F - WGS84_F ** 2  # excentricidade ao quadrado
 
+# Velocidade angular da Terra (rad/s), IERS. Usada para converter a velocidade
+# do referencial (quase) inercial TEME para o referencial girante ECEF: sem o
+# termo -omega x r, a taxa de variacao da distancia sairia com um erro da
+# ordem de centenas de m/s perto do horizonte.
+EARTH_ROTATION_RAD_S = 7.2921159e-5
+
+# Velocidade da luz no vacuo (km/s), para o desvio Doppler.
+SPEED_OF_LIGHT_KM_S = 299_792.458
+
 
 class GeodeticPosition(NamedTuple):
     latitude_deg: float
@@ -87,6 +96,47 @@ def teme_to_ecef(position_teme_km: tuple, jd: float, fr: float) -> tuple:
     y_ecef = -x * s + y * c
     z_ecef = z
     return (x_ecef, y_ecef, z_ecef)
+
+
+def teme_to_ecef_velocity(
+    velocity_teme_km_s: tuple, position_ecef_km: tuple, jd: float, fr: float
+) -> tuple:
+    """Converte a velocidade de TEME para ECEF.
+
+    Duas parcelas: a mesma rotacao pelo angulo GMST aplicada a posicao, e o
+    termo `-omega x r` que aparece porque o ECEF gira junto com a Terra. Sem o
+    segundo termo, a componente radial da velocidade (usada no Doppler e no
+    range rate) ficaria errada por centenas de m/s.
+    """
+    vx, vy, vz = velocity_teme_km_s
+    theta = gmst_rad(jd, fr)
+    c, s = math.cos(theta), math.sin(theta)
+
+    vx_rot = vx * c + vy * s
+    vy_rot = -vx * s + vy * c
+    vz_rot = vz
+
+    x_ecef, y_ecef, _ = position_ecef_km
+    w = EARTH_ROTATION_RAD_S
+    return (vx_rot + w * y_ecef, vy_rot - w * x_ecef, vz_rot)
+
+
+def range_rate_km_s(
+    satellite_ecef_km: tuple, satellite_velocity_ecef_km_s: tuple, station_ecef_km: tuple
+) -> float:
+    """Taxa de variacao da distancia estacao->satelite (km/s).
+
+    Negativa enquanto o satelite se aproxima, positiva quando se afasta. A
+    estacao esta parada no ECEF, entao so entra a velocidade do satelite.
+    """
+    dx = satellite_ecef_km[0] - station_ecef_km[0]
+    dy = satellite_ecef_km[1] - station_ecef_km[1]
+    dz = satellite_ecef_km[2] - station_ecef_km[2]
+    rng = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if rng == 0.0:
+        return 0.0
+    vx, vy, vz = satellite_velocity_ecef_km_s
+    return (dx * vx + dy * vy + dz * vz) / rng
 
 
 def ecef_to_geodetic(position_ecef_km: tuple) -> GeodeticPosition:

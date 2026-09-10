@@ -31,3 +31,8 @@ pythonpath = ["src"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+# O painel do GRS Manager é servido de um template Jinja; sem isto ele não
+# entra no wheel (só funcionaria em instalação editável).
+[tool.setuptools.package-data]
+grs_manager = ["status/templates/*.html"]
