@@ -1,3 +1,9 @@
+> **Arquivado em 2026-09-11.** A estação agora vive em repositórios separados,
+> na organização [`nanosat-gs`](https://github.com/nanosat-gs) — comece por
+> [`nanosat-gs/grs-station`](https://github.com/nanosat-gs/grs-station). O que
+> foi para onde, e por quê, está em [ARCHIVED.md](ARCHIVED.md). O conteúdo
+> abaixo descreve a estação como ela era antes da divisão.
+
 # Ground Station Manager (MGM8)
 
 Gerenciador de operações da estação terrestre do SpaceLab — middleware central entre o **GRS Manager** (Control Desktop) e os microserviços do **Station Server** (Control Server).

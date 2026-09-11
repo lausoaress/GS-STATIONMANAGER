@@ -1,3 +1,12 @@
+# ============================================================================
+# ARQUIVADO em 2026-09-11 — a estação roda do orquestrador nanosat-gs/grs-station.
+#
+# NÃO rode `docker compose up` aqui: este arquivo usa o mesmo nome de projeto
+# (gs-stationmanager) e os mesmos container_name do orquestrador, e um `up` aqui
+# SUBSTITUI a estação que está rodando pelas imagens antigas. Serve só para
+# rollback — ver ARCHIVED.md.
+# ============================================================================
+
 # Compose único da estação terrestre.
 #
 # Cada bloco continua sendo um repositório independente com o seu próprio

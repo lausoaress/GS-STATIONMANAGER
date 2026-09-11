@@ -1,3 +1,26 @@
+# ARQUIVADO EM 2026-09-11 — não trabalhe neste repositório
+
+A estação foi dividida em repositórios, um por bloco, na organização
+`nanosat-gs`. **Mudanças vão para lá**, não para cá:
+
+- orquestrador (compose, bootstrap, docs, e2e): `nanosat-gs/grs-station`;
+- blocos: `nanosat-gs/spacelab-tracking`, `grs-station-manager`,
+  `grs-manager`, `grs-tc-scheduler`; o TC Generator segue no fork
+  `edsoncepedi/grs-tc-generator`.
+
+A estação roda do clone do orquestrador (`C:/dev/spacelab/grs-station` na
+máquina do Edson), cujo `CLAUDE.md` tem a arquitetura atual.
+
+**Não rode `docker compose` aqui.** Este compose usa o mesmo nome de projeto e
+de containers do orquestrador; um `up` aqui substituiria a estação que está
+rodando pelas imagens antigas. Só em rollback — ver `ARCHIVED.md`.
+
+Tudo abaixo é o registro histórico de como a estação era antes da divisão, e
+não descreve mais o sistema (por exemplo: o painel já não lê o banco, e o TC
+Scheduler tem uma API na 5591).
+
+---
+
 # Contexto do projeto
 
 Estação terrestre do SpaceLab. Este repositório é o **orquestrador**: o
